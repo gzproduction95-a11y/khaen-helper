@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Settings, Music, Info, Volume2, RotateCcw, Piano, Zap, Menu, X, ChevronRight, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Settings, Music, Info, RotateCcw, Piano, Zap, Menu, X, ChevronRight } from 'lucide-react';
 
 // --- Types & Constants ---
 
 type NoteName = 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B';
 type KeyMode = 'Major' | 'Minor';
 type TextColor = 'black' | 'red' | 'green';
-type ScaleDegree = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 interface HoleDefinition {
   id: string;
@@ -71,15 +70,12 @@ const getRelativeMinorRoot = (majorRoot: NoteName): NoteName => {
   return NOTES[(idx + 9) % 12];
 };
 
-// Returns the Root of the Relative Major
-const getRelativeMajorRoot = (minorRoot: NoteName): NoteName => {
-  const idx = getNoteIndex(minorRoot);
-  // Up 3 semitones
-  return NOTES[(idx + 3) % 12];
-};
-
-const transposeNote = (rootIndex: number, semitones: number): NoteName => {
-  return NOTES[(rootIndex + semitones) % 12];
+const getRomanNumeral = (degree: number, quality: string) => {
+  const romans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+  let r = romans[degree - 1];
+  if (quality === 'm' || quality === 'dim') r = r.toLowerCase();
+  if (quality === 'dim') r += '°';
+  return r;
 };
 
 // Generate Diatonic Chords for a key
@@ -93,11 +89,6 @@ const getDiatonicChords = (root: NoteName, mode: KeyMode) => {
     const third = scaleNotes[(i + 2) % 7];
     const fifth = scaleNotes[(i + 4) % 7];
     
-    // Determine chord quality
-    const rootMidi = getMidiFromNote(note, 4);
-    const thirdMidi = getMidiFromNote(third, third === 'C' || third === 'C#' || third === 'D' ? 5 : 4); // simplistic octave wrap
-    const fifthMidi = getMidiFromNote(fifth, 5); // simplistic
-    
     // Measure intervals to determine Major/Minor/Dim
     const distThird = (NOTES.indexOf(third) - NOTES.indexOf(note) + 12) % 12;
     const distFifth = (NOTES.indexOf(fifth) - NOTES.indexOf(note) + 12) % 12;
@@ -108,18 +99,10 @@ const getDiatonicChords = (root: NoteName, mode: KeyMode) => {
     else if (distThird === 3 && distFifth === 6) quality = 'dim'; // Diminished
     else if (distThird === 4 && distFifth === 8) quality = 'aug'; // Augmented
 
-    return { root: note, quality, roman: getRomanNumeral(i + 1, mode, quality) };
+    return { root: note, quality, roman: getRomanNumeral(i + 1, quality) };
   });
 
   return chords;
-};
-
-const getRomanNumeral = (degree: number, keyMode: KeyMode, quality: string) => {
-  const romans = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
-  let r = romans[degree - 1];
-  if (quality === 'm' || quality === 'dim') r = r.toLowerCase();
-  if (quality === 'dim') r += '°';
-  return r;
 };
 
 // Chord Detection Logic
