@@ -7,7 +7,7 @@ const FLATS  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
 type ScaleType = 'major' | 'minor';
-type Modifier = 'add9' | 'add11' | 'add13' | 'add6' | 'no3' | 'no5' | 'sus4' | 'sus2';
+type Modifier = 'add9' | 'add11' | 'add13' | 'add6' | 'no3' | 'no5' | 'sus4' | 'sus2' | 'aug' | 'dim_mod';
 
 interface ChordSelection {
   rootVal: number | null;
@@ -52,6 +52,8 @@ const RIGHT_COL: HoleConfig[] = [
   { id: 'R1', degIndex: 0, label: '1', colorClass: 'num' },
 ];
 
+const ALL_HOLES = [...LEFT_COL, ...RIGHT_COL];
+
 // === UTILITIES ===
 
 function getNoteVal(name: string): number {
@@ -75,7 +77,7 @@ export default function App() {
   // State
   const [keyRoot, setKeyRoot] = useState<string>('A');
   const [keyType, setKeyType] = useState<ScaleType>('minor');
-  const [activeNotes, setActiveNotes] = useState<number[]>([]);
+  const [activeHoleIds, setActiveHoleIds] = useState<Set<string>>(new Set());
   const [hintRoot, setHintRoot] = useState<number | null>(null);
   const [selection, setSelection] = useState<ChordSelection>({
     rootVal: null,
@@ -93,7 +95,19 @@ export default function App() {
     return intervals.map(i => (rootVal + i) % 12);
   }, [keyRoot, keyType]);
 
-  // === LOGIC: Compute Active Notes from Selection ===
+  // Derived State: Active Note Values for Analysis
+  const activeNoteValues = useMemo(() => {
+    const notes = new Set<number>();
+    activeHoleIds.forEach(id => {
+      const hole = ALL_HOLES.find(h => h.id === id);
+      if (hole) {
+        notes.add(currentKeyNotes[hole.degIndex]);
+      }
+    });
+    return [...notes];
+  }, [activeHoleIds, currentKeyNotes]);
+
+  // === LOGIC: Compute Active Holes from Selection ===
   useEffect(() => {
     if (selection.rootVal === null || selection.quality === null) {
       return;
@@ -105,6 +119,7 @@ export default function App() {
     const modifiers = selection.modifiers;
     let intervals = [0];
 
+    // Base Triad
     if (q === 'Maj') { intervals.push(4); intervals.push(7); }
     else if (q === 'm') { intervals.push(3); intervals.push(7); }
     else if (q === 'dim') { intervals.push(3); intervals.push(6); }
@@ -123,27 +138,52 @@ export default function App() {
           ];
     }
 
-    // Modifiers
-    modifiers.forEach(m => {
-      if (m === 'add9') intervals.push(2);
-      if (m === 'add11') intervals.push(5);
-      if (m === 'add13') intervals.push(9);
-      if (m === 'add6') intervals.push(9);
-      if (m === 'no3') intervals = intervals.filter(i => i !== 3 && i !== 4);
-      if (m === 'no5') intervals = intervals.filter(i => i !== 7 && i !== 6);
-      if (m === 'sus4') { intervals.push(5); intervals = intervals.filter(i => i !== 3 && i !== 4); }
-      if (m === 'sus2') { intervals.push(2); intervals = intervals.filter(i => i !== 3 && i !== 4); }
+    // Modifiers Logic
+    if (modifiers.has('no3')) intervals = intervals.filter(i => i !== 3 && i !== 4);
+    if (modifiers.has('no5')) intervals = intervals.filter(i => i !== 7 && i !== 6);
+    
+    if (modifiers.has('sus4')) { 
+      intervals.push(5); 
+      intervals = intervals.filter(i => i !== 3 && i !== 4); 
+    }
+    if (modifiers.has('sus2')) { 
+      intervals.push(2); 
+      intervals = intervals.filter(i => i !== 3 && i !== 4); 
+    }
+    if (modifiers.has('aug')) {
+      intervals.push(8);
+      intervals = intervals.filter(i => i !== 7 && i !== 6);
+    }
+    if (modifiers.has('dim_mod')) {
+      intervals.push(6);
+      intervals = intervals.filter(i => i !== 7 && i !== 8);
+    }
+
+    // Extensions
+    if (modifiers.has('add9')) intervals.push(2);
+    if (modifiers.has('add11')) intervals.push(5);
+    if (modifiers.has('add13')) intervals.push(9);
+    if (modifiers.has('add6')) intervals.push(9);
+
+    const targetVals = [...new Set(intervals.map(i => (root + i) % 12))];
+    
+    // Convert target note values back to all matching hole IDs
+    const newHoleIds = new Set<string>();
+    ALL_HOLES.forEach(h => {
+      const noteVal = currentKeyNotes[h.degIndex];
+      if (targetVals.includes(noteVal)) {
+        newHoleIds.add(h.id);
+      }
     });
 
-    const targetVals = intervals.map(i => (root + i) % 12);
-    setActiveNotes(targetVals);
+    setActiveHoleIds(newHoleIds);
     setHintRoot(root);
 
   }, [selection, currentKeyNotes, keyType]);
 
   // === LOGIC: Chord Analysis ===
   const analyzedChord = useMemo(() => {
-    const unique = [...new Set(activeNotes)].sort((a, b) => a - b);
+    const unique = [...activeNoteValues].sort((a, b) => a - b);
     if (unique.length === 0) return { main: '-', sub: 'Ready', notes: '-' };
 
     const noteNames = unique.map(v => getDisplayNote(v, keyRoot, keyType));
@@ -164,15 +204,17 @@ export default function App() {
       const hasm3 = ints.has(3);
       const hasP5 = ints.has(7);
       const hasd5 = ints.has(6);
+      const hasAug5 = ints.has(8);
       const hasP4 = ints.has(5);
       const hasM2 = ints.has(2);
 
       if (hasm3 && hasd5 && !hasP5) { baseType = "dim"; valid = true; }
       else if (hasm3 && hasP5) { baseType = "m"; valid = true; }
+      else if (hasM3 && hasAug5) { baseType = "aug"; valid = true; }
       else if (hasM3 && hasP5) { baseType = "Maj"; valid = true; }
       else if (hasP4 && hasP5 && !hasm3 && !hasM3) { baseType = "sus4"; valid = true; }
       else if (hasM2 && hasP5 && !hasm3 && !hasM3) { baseType = "sus2"; valid = true; }
-      else if (!hasP5 && !hasd5) {
+      else if (!hasP5 && !hasd5 && !hasAug5) {
           if (hasM3) { baseType = "no5Maj"; valid = true; }
           else if (hasm3) { baseType = "no5m"; valid = true; }
       }
@@ -192,14 +234,17 @@ export default function App() {
           else if (baseType === "dim") name += "m7b5"; 
           else if (baseType === "sus4") name += "7sus4"; 
           else if (baseType === "sus2") name += "7sus2";
+          else if (baseType === "aug") name += "7(#5)";
       } else if (hasM7) { 
           if (baseType === "m" || baseType === "no5m") name += "m(maj7)";
+          else if (baseType === "aug") name += "maj7(#5)";
           else name += "maj7"; 
       } else if (hasdim7 && baseType === "dim") {
           name += "dim7";
       } else {
           if (baseType === "m") name += "m";
           else if (baseType === "dim") name += "dim";
+          else if (baseType === "aug") name += "aug";
           else if (baseType === "sus4") name += "sus4";
           else if (baseType === "sus2") name += "sus2";
           else if (baseType === "5") name += "5";
@@ -257,7 +302,7 @@ export default function App() {
 
     return { main: '?', sub: 'Unknown Shape', notes: "Notes: " + noteNames.join(" - ") };
 
-  }, [activeNotes, hintRoot, keyRoot, keyType, currentKeyNotes]);
+  }, [activeNoteValues, hintRoot, keyRoot, keyType, currentKeyNotes]);
 
 
   // === MIDI HANDLING ===
@@ -265,10 +310,10 @@ export default function App() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let midiAccess: any = null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const onMIDIMessage = (event: any) => {
-      const data = event.data;
-      if (!data) return;
+      const data = event.data as Uint8Array;
+      if (!data || data.length < 3) return;
+      
       const cmd = data[0] & 0xf0;
       const note = data[1];
       const velocity = data[2];
@@ -276,12 +321,24 @@ export default function App() {
 
       if (cmd === 144 && velocity > 0) {
         // Note On
-        setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() }); // Clear sidebar selection
-        setActiveNotes(prev => [...prev, noteVal]);
+        setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
+        setActiveHoleIds(prev => {
+          const next = new Set(prev);
+          ALL_HOLES.forEach(h => {
+             if (currentKeyNotes[h.degIndex] === noteVal) next.add(h.id);
+          });
+          return next;
+        });
       } else if (cmd === 128 || (cmd === 144 && velocity === 0)) {
         // Note Off
-        setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() }); // Clear sidebar selection
-        setActiveNotes(prev => prev.filter(n => n !== noteVal));
+        setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
+        setActiveHoleIds(prev => {
+          const next = new Set(prev);
+          ALL_HOLES.forEach(h => {
+            if (currentKeyNotes[h.degIndex] === noteVal) next.delete(h.id);
+          });
+          return next;
+        });
       }
     };
 
@@ -290,13 +347,9 @@ export default function App() {
         try {
           midiAccess = await navigator.requestMIDIAccess();
           setMidiConnected(midiAccess.inputs.size > 0);
-          
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           midiAccess.inputs.forEach((input: any) => {
             input.onmidimessage = onMIDIMessage;
           });
-
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           midiAccess.onstatechange = (e: any) => {
              setMidiConnected(e.port.state === 'connected');
           };
@@ -307,17 +360,14 @@ export default function App() {
     };
 
     initMIDI();
-    return () => {
-       // Cleanup if needed
-    };
-  }, []);
+  }, [currentKeyNotes]);
 
 
   // === HANDLERS ===
   const resetAll = () => {
     setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
     setHintRoot(null);
-    setActiveNotes([]);
+    setActiveHoleIds(new Set());
   };
 
   const toggleMod = (mod: Modifier) => {
@@ -343,23 +393,26 @@ export default function App() {
     }
   };
 
-  const handleHoleClick = (degIndex: number) => {
-    // Determine note val from degree
-    const noteVal = currentKeyNotes[degIndex];
-    setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() }); // Clear sidebar
+  const handleHoleClick = (holeId: string, degIndex: number) => {
+    // Clear sidebar selection to enter manual mode
+    setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() }); 
     
-    // Toggle logic
-    setActiveNotes(prev => {
-       const exists = prev.includes(noteVal);
-       const newNotes = exists 
-         ? prev.filter(n => n !== noteVal)
-         : [...prev, noteVal];
+    const noteVal = currentKeyNotes[degIndex];
+
+    setActiveHoleIds(prev => {
+       const next = new Set(prev);
+       const exists = next.has(holeId);
        
-       // Update hint root if adding first note
-       if (!exists && newNotes.length === 1) {
-         setHintRoot(noteVal);
+       if (exists) {
+         next.delete(holeId);
+       } else {
+         next.add(holeId);
+         // If this is the first hole added, use its note as the hint root
+         if (next.size === 1) {
+           setHintRoot(noteVal);
+         }
        }
-       return newNotes;
+       return next;
     });
   };
 
@@ -379,7 +432,6 @@ export default function App() {
   return (
     <div className="flex w-screen h-screen overflow-hidden bg-[#f5f7fa] text-[#2b2d42] font-sans">
       
-      {/* Styles for complex shapes */}
       <style>{`
         .khaen-body {
           border-radius: 50% 50% 40% 40% / 15% 15% 10% 10%;
@@ -387,7 +439,6 @@ export default function App() {
         .text-shadow {
            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
-        /* Custom scrollbar for this component */
         .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-thumb { background-color: #ced4da; border-radius: 4px; }
       `}</style>
@@ -395,7 +446,6 @@ export default function App() {
       {/* --- LEFT SIDEBAR --- */}
       <div className="w-[340px] bg-white border-r border-[#e9ecef] flex flex-col z-10 shadow-[4px_0_20px_rgba(0,0,0,0.03)] shrink-0">
         
-        {/* 1. Key / Mode */}
         <div className="p-5 border-b border-[#e9ecef] bg-white">
           <div className="text-[11px] font-extrabold text-[#adb5bd] uppercase mb-2.5 tracking-wider">1. Key / 调式设定</div>
           <div className="flex gap-2.5">
@@ -426,18 +476,17 @@ export default function App() {
           </div>
         </div>
 
-        {/* Scroll Area */}
         <div className="flex-1 overflow-y-auto custom-scroll pb-10">
-          
-          {/* 2. Modifiers */}
           <div>
             <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">2. Modifiers / 修饰</div>
             <div className="px-5 pb-4 border-b border-[#e9ecef]">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: 'add9', label: '+ add9' }, { id: 'add11', label: '+ add11' }, { id: 'add13', label: '+ add13' },
-                  { id: 'add6', label: '+ add6' }, { id: 'no3', label: '- no3' }, { id: 'no5', label: '- no5' },
-                  { id: 'sus4', label: 'sus4' }
+                  { id: 'add9', label: '+ add9' }, { id: 'add11', label: '+ add11' }, 
+                  { id: 'add13', label: '+ add13' }, { id: 'add6', label: '+ add6' }, 
+                  { id: 'no3', label: '- no3' }, { id: 'no5', label: '- no5' },
+                  { id: 'sus4', label: 'sus4' }, { id: 'sus2', label: 'sus2' },
+                  { id: 'aug', label: 'aug' }, { id: 'dim_mod', label: 'dim' }
                 ].map((mod) => (
                   <button
                     key={mod.id}
@@ -457,7 +506,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3. Chords */}
           <div>
             <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">3. Chords / 基础和弦</div>
             <div className="px-5">
@@ -474,7 +522,6 @@ export default function App() {
                 if (q === 'm') suffix = 'm7';
                 if (q === 'dim') suffix = 'm7b5';
 
-                // Specific Overrides from HTML logic
                 if (keyType === 'major' && i === 4) suffix = '7';
                 if (keyType === 'major' && i === 6) suffix = 'm7b5';
                 if (keyType === 'minor' && i === 1) suffix = 'm7b5';
@@ -529,7 +576,6 @@ export default function App() {
       {/* --- RIGHT MAIN PANEL --- */}
       <div className="flex-1 flex flex-col items-center p-8 relative h-full overflow-y-auto">
         
-        {/* Info Panel */}
         <div className="bg-white px-10 py-5 rounded-2xl w-[480px] shadow-[0_10px_40px_rgba(0,0,0,0.06)] mb-8 text-center shrink-0">
           <div className="text-[42px] font-black text-[#d90429] leading-tight mb-1 min-h-[46px]">
             {analyzedChord.main}
@@ -553,12 +599,10 @@ export default function App() {
           </div>
         </div>
 
-        {/* Visualizer Container */}
         <div 
            className="relative pb-12 select-none"
            style={{ transform: `scale(${scaleFactor})`, transformOrigin: 'top center' }}
         >
-           {/* Labels */}
            <div className="absolute top-[75px] -left-[45px] text-sm font-bold text-[#2b2d42]">L5</div>
            <div className="absolute top-[300px] -left-[45px] text-sm font-bold text-[#2b2d42]">L2-4</div>
            <div className="absolute -bottom-[30px] -left-[45px] text-sm font-bold text-[#2b2d42]">L1</div>
@@ -567,25 +611,21 @@ export default function App() {
            <div className="absolute top-[300px] -right-[45px] text-sm font-bold text-[#2b2d42]">R2-4</div>
            <div className="absolute -bottom-[30px] -right-[45px] text-sm font-bold text-[#2b2d42]">R1</div>
 
-           {/* Dashed Box */}
            <div className="absolute top-[145px] w-[220px] h-[380px] left-1/2 -translate-x-1/2 border-2 border-dashed border-[#e9ecef] -z-20 rounded-xl"></div>
 
-           {/* Instrument Body */}
            <div className="khaen-body relative w-[180px] h-[680px] bg-white border-[4px] border-[#2b2d42] flex justify-between px-[25px] pt-[60px] pb-[80px] shadow-[0_25px_50px_rgba(0,0,0,0.1)] box-border">
-              {/* Mouthpiece */}
               <div className="absolute -top-[25px] left-1/2 -translate-x-1/2 w-[60px] h-[25px] border-[4px] border-b-0 border-[#2b2d42] bg-white -z-10"></div>
               
-              {/* Left Column */}
               <div className="flex flex-col justify-between h-full w-[50px] items-center">
                  {LEFT_COL.map((h) => {
                    const noteVal = currentKeyNotes[h.degIndex];
-                   const isActive = activeNotes.includes(noteVal);
+                   const isActive = activeHoleIds.has(h.id);
                    const noteName = getDisplayNote(noteVal, keyRoot, keyType);
 
                    return (
                      <div 
                        key={h.id}
-                       onClick={() => handleHoleClick(h.degIndex)}
+                       onClick={() => handleHoleClick(h.id, h.degIndex)}
                        className={`
                          w-[46px] h-[46px] border-[2px] rounded-full flex justify-center items-center cursor-pointer relative transition-all duration-100
                          hover:scale-110 hover:bg-[#f8f9fa]
@@ -612,17 +652,16 @@ export default function App() {
                  })}
               </div>
 
-              {/* Right Column */}
               <div className="flex flex-col justify-between h-full w-[50px] items-center">
                  {RIGHT_COL.map((h) => {
                    const noteVal = currentKeyNotes[h.degIndex];
-                   const isActive = activeNotes.includes(noteVal);
+                   const isActive = activeHoleIds.has(h.id);
                    const noteName = getDisplayNote(noteVal, keyRoot, keyType);
 
                    return (
                      <div 
                        key={h.id}
-                       onClick={() => handleHoleClick(h.degIndex)}
+                       onClick={() => handleHoleClick(h.id, h.degIndex)}
                        className={`
                          w-[46px] h-[46px] border-[2px] rounded-full flex justify-center items-center cursor-pointer relative transition-all duration-100
                          hover:scale-110 hover:bg-[#f8f9fa]
