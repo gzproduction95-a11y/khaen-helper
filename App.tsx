@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 // === CONSTANTS & TYPES ===
 
@@ -79,6 +80,8 @@ export default function App() {
   const [keyType, setKeyType] = useState<ScaleType>('minor');
   const [activeHoleIds, setActiveHoleIds] = useState<Set<string>>(new Set());
   const [hintRoot, setHintRoot] = useState<number | null>(null);
+  const [octaveExpanded, setOctaveExpanded] = useState<boolean>(false);
+  const [sidebarVisible, setSidebarVisible] = useState<boolean>(true);
   const [selection, setSelection] = useState<ChordSelection>({
     rootVal: null,
     quality: null,
@@ -167,12 +170,10 @@ export default function App() {
 
     const targetVals = [...new Set(intervals.map(i => (root + i) % 12))];
     
-    // Convert target note values back to matching hole IDs
-    // USER REQUEST: Only light up the 'num' (black numbers) holes by default for sidebar chord selection
+    // Default selection: only 'num' holes
     const newHoleIds = new Set<string>();
     ALL_HOLES.forEach(h => {
       const noteVal = currentKeyNotes[h.degIndex];
-      // Only include 'num' class holes (black text) to target the primary register
       if (targetVals.includes(noteVal) && h.colorClass === 'num') {
         newHoleIds.add(h.id);
       }
@@ -215,7 +216,7 @@ export default function App() {
       else if (hasM3 && hasAug5) { baseType = "aug"; valid = true; }
       else if (hasM3 && hasP5) { baseType = "Maj"; valid = true; }
       else if (hasP4 && hasP5 && !hasm3 && !hasM3) { baseType = "sus4"; valid = true; }
-      else if (hasM2 && hasP5 && !hasm3 && !hasM3) { baseType = "sus2"; valid = true; }
+      else if (hasM2 && hasP5 && !hasm3 && !hasM2) { baseType = "sus2"; valid = true; }
       else if (!hasP5 && !hasd5 && !hasAug5) {
           if (hasM3) { baseType = "no5Maj"; valid = true; }
           else if (hasm3) { baseType = "no5m"; valid = true; }
@@ -322,7 +323,6 @@ export default function App() {
       const noteVal = note % 12;
 
       if (cmd === 144 && velocity > 0) {
-        // Note On
         setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
         setActiveHoleIds(prev => {
           const next = new Set(prev);
@@ -332,7 +332,6 @@ export default function App() {
           return next;
         });
       } else if (cmd === 128 || (cmd === 144 && velocity === 0)) {
-        // Note Off
         setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
         setActiveHoleIds(prev => {
           const next = new Set(prev);
@@ -370,6 +369,7 @@ export default function App() {
     setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
     setHintRoot(null);
     setActiveHoleIds(new Set());
+    setOctaveExpanded(false);
   };
 
   const toggleMod = (mod: Modifier) => {
@@ -396,43 +396,48 @@ export default function App() {
   };
 
   const handleHoleClick = (holeId: string, degIndex: number) => {
-    // Clear sidebar selection to enter manual mode
     setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() }); 
-    
     const noteVal = currentKeyNotes[degIndex];
 
     setActiveHoleIds(prev => {
        const next = new Set(prev);
        const exists = next.has(holeId);
-       
        if (exists) {
          next.delete(holeId);
        } else {
          next.add(holeId);
-         // If this is the first hole added, use its note as the hint root
-         if (next.size === 1) {
-           setHintRoot(noteVal);
-         }
+         if (next.size === 1) setHintRoot(noteVal);
        }
        return next;
     });
   };
 
-  // Auto-resize visualizer for mobile
+  // Auto-resize visualizer and Handle Orientation
   useEffect(() => {
     const handleResize = () => {
+       const w = window.innerWidth;
        const h = window.innerHeight;
+       
+       // Handle scale
        if (h < 700) setScaleFactor(0.8);
        else if (h < 900) setScaleFactor(0.9);
        else setScaleFactor(1);
+
+       // USER REQUEST: Auto-hide sidebar if mobile/tablet in portrait mode
+       const isPortrait = h > w;
+       const isMobileOrTablet = w <= 1024;
+       if (isPortrait && isMobileOrTablet) {
+          setSidebarVisible(false);
+       }
     };
+    
     window.addEventListener('resize', handleResize);
-    handleResize();
+    handleResize(); // Initial call
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return (
-    <div className="flex w-screen h-screen overflow-hidden bg-[#f5f7fa] text-[#2b2d42] font-sans">
+    <div className="flex w-screen h-screen overflow-hidden bg-[#f5f7fa] text-[#2b2d42] font-sans relative">
       
       <style>{`
         .khaen-body {
@@ -445,131 +450,149 @@ export default function App() {
         .custom-scroll::-webkit-scrollbar-thumb { background-color: #ced4da; border-radius: 4px; }
       `}</style>
 
-      {/* --- LEFT SIDEBAR --- */}
-      <div className="w-[340px] bg-white border-r border-[#e9ecef] flex flex-col z-10 shadow-[4px_0_20px_rgba(0,0,0,0.03)] shrink-0">
-        
-        <div className="p-5 border-b border-[#e9ecef] bg-white">
-          <div className="text-[11px] font-extrabold text-[#adb5bd] uppercase mb-2.5 tracking-wider">1. Key / 调式设定</div>
-          <div className="flex gap-2.5">
-            <select 
-              value={keyRoot}
-              onChange={(e) => {
-                setKeyRoot(e.target.value);
-                resetAll();
-              }}
-              className="flex-1 p-2 text-sm border border-[#ced4da] rounded-md bg-white cursor-pointer text-[#495057] focus:outline-none focus:ring-2 focus:ring-[#2b2d42]"
-            >
-              <option value="C">C</option><option value="Db">Db / C#</option><option value="D">D</option>
-              <option value="Eb">Eb</option><option value="E">E</option><option value="F">F</option>
-              <option value="Gb">Gb / F#</option><option value="G">G</option><option value="Ab">Ab</option>
-              <option value="A">A</option><option value="Bb">Bb</option><option value="B">B</option>
-            </select>
-            <select 
-              value={keyType}
-              onChange={(e) => {
-                setKeyType(e.target.value as ScaleType);
-                resetAll();
-              }}
-              className="flex-1 p-2 text-sm border border-[#ced4da] rounded-md bg-white cursor-pointer text-[#495057] focus:outline-none focus:ring-2 focus:ring-[#2b2d42]"
-            >
-              <option value="minor">Minor (小调)</option>
-              <option value="major">Major (大调)</option>
-            </select>
-          </div>
-        </div>
+      {/* --- TOGGLE BUTTON --- */}
+      <button 
+        onClick={() => setSidebarVisible(!sidebarVisible)}
+        className={`
+          absolute top-8 z-50 p-2 bg-white border border-[#e9ecef] rounded-full shadow-lg transition-all duration-300 hover:scale-110
+          ${sidebarVisible ? 'left-[324px]' : 'left-4'}
+        `}
+        title={sidebarVisible ? "Hide Sidebar" : "Show Sidebar"}
+      >
+        {sidebarVisible ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
+      </button>
 
-        <div className="flex-1 overflow-y-auto custom-scroll pb-10">
-          <div>
-            <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">2. Modifiers / 修饰</div>
-            <div className="px-5 pb-4 border-b border-[#e9ecef]">
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: 'add9', label: '+ add9' }, { id: 'add11', label: '+ add11' }, 
-                  { id: 'add13', label: '+ add13' }, { id: 'add6', label: '+ add6' }, 
-                  { id: 'no3', label: '- no3' }, { id: 'no5', label: '- no5' },
-                  { id: 'sus4', label: 'sus4' }, { id: 'sus2', label: 'sus2' },
-                  { id: 'aug', label: 'aug' }, { id: 'dim_mod', label: 'dim' }
-                ].map((mod) => (
-                  <button
-                    key={mod.id}
-                    onClick={() => toggleMod(mod.id as Modifier)}
-                    className={`
-                      text-[13px] py-2 border rounded-md font-medium transition-colors select-none
-                      ${selection.modifiers.has(mod.id as Modifier)
-                        ? 'bg-[#2b2d42] text-white border-[#2b2d42]' 
-                        : 'bg-[#f8f9fa] border-[#dee2e6] text-[#6c757d] hover:bg-[#e9ecef] hover:border-[#adb5bd]'
-                      }
-                    `}
-                  >
-                    {mod.label}
-                  </button>
-                ))}
-              </div>
+      {/* --- LEFT SIDEBAR --- */}
+      <div 
+        className={`
+          h-full bg-white border-r border-[#e9ecef] flex flex-col z-10 shadow-[4px_0_20px_rgba(0,0,0,0.03)] shrink-0 transition-all duration-300 overflow-hidden
+          ${sidebarVisible ? 'w-[340px]' : 'w-0 border-none'}
+        `}
+      >
+        <div className="w-[340px]">
+          <div className="p-5 border-b border-[#e9ecef] bg-white">
+            <div className="text-[11px] font-extrabold text-[#adb5bd] uppercase mb-2.5 tracking-wider">1. Key / 调式设定</div>
+            <div className="flex gap-2.5">
+              <select 
+                value={keyRoot}
+                onChange={(e) => {
+                  setKeyRoot(e.target.value);
+                  resetAll();
+                }}
+                className="flex-1 p-2 text-sm border border-[#ced4da] rounded-md bg-white cursor-pointer text-[#495057] focus:outline-none focus:ring-2 focus:ring-[#2b2d42]"
+              >
+                <option value="C">C</option><option value="Db">Db / C#</option><option value="D">D</option>
+                <option value="Eb">Eb</option><option value="E">E</option><option value="F">F</option>
+                <option value="Gb">Gb / F#</option><option value="G">G</option><option value="Ab">Ab</option>
+                <option value="A">A</option><option value="Bb">Bb</option><option value="B">B</option>
+              </select>
+              <select 
+                value={keyType}
+                onChange={(e) => {
+                  setKeyType(e.target.value as ScaleType);
+                  resetAll();
+                }}
+                className="flex-1 p-2 text-sm border border-[#ced4da] rounded-md bg-white cursor-pointer text-[#495057] focus:outline-none focus:ring-2 focus:ring-[#2b2d42]"
+              >
+                <option value="minor">Minor (小调)</option>
+                <option value="major">Major (大调)</option>
+              </select>
             </div>
           </div>
 
-          <div>
-            <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">3. Chords / 基础和弦</div>
-            <div className="px-5">
-              {currentKeyNotes.map((rootVal, i) => {
-                const qualities = SCALES[keyType].qualities;
-                const q = qualities[i];
-                const noteName = getDisplayNote(rootVal, keyRoot, keyType);
-                
-                let triName = noteName + (q === 'm' ? 'm' : (q === 'dim' ? 'dim' : ''));
-                let sevName = noteName;
-                let suffix = '7';
+          <div className="h-[calc(100vh-100px)] overflow-y-auto custom-scroll pb-10">
+            <div>
+              <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">2. Modifiers / 修饰</div>
+              <div className="px-5 pb-4 border-b border-[#e9ecef]">
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'add9', label: '+ add9' }, { id: 'add11', label: '+ add11' }, 
+                    { id: 'add13', label: '+ add13' }, { id: 'add6', label: '+ add6' }, 
+                    { id: 'no3', label: '- no3' }, { id: 'no5', label: '- no5' },
+                    { id: 'sus4', label: 'sus4' }, { id: 'sus2', label: 'sus2' },
+                    { id: 'aug', label: 'aug' }, { id: 'dim_mod', label: 'dim' }
+                  ].map((mod) => (
+                    <button
+                      key={mod.id}
+                      onClick={() => toggleMod(mod.id as Modifier)}
+                      className={`
+                        text-[13px] py-2 border rounded-md font-medium transition-colors select-none
+                        ${selection.modifiers.has(mod.id as Modifier)
+                          ? 'bg-[#2b2d42] text-white border-[#2b2d42]' 
+                          : 'bg-[#f8f9fa] border-[#dee2e6] text-[#6c757d] hover:bg-[#e9ecef] hover:border-[#adb5bd]'
+                        }
+                      `}
+                    >
+                      {mod.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
-                if (q === 'Maj') suffix = 'maj7';
-                if (q === 'm') suffix = 'm7';
-                if (q === 'dim') suffix = 'm7b5';
+            <div>
+              <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">3. Chords / 基础和弦</div>
+              <div className="px-5">
+                {currentKeyNotes.map((rootVal, i) => {
+                  const qualities = SCALES[keyType].qualities;
+                  const q = qualities[i];
+                  const noteName = getDisplayNote(rootVal, keyRoot, keyType);
+                  
+                  let triName = noteName + (q === 'm' ? 'm' : (q === 'dim' ? 'dim' : ''));
+                  let sevName = noteName;
+                  let suffix = '7';
 
-                if (keyType === 'major' && i === 4) suffix = '7';
-                if (keyType === 'major' && i === 6) suffix = 'm7b5';
-                if (keyType === 'minor' && i === 1) suffix = 'm7b5';
-                if (keyType === 'minor' && i === 2) suffix = 'maj7';
-                if (keyType === 'minor' && i === 4) suffix = 'm7';
-                if (keyType === 'minor' && i === 6) suffix = '7';
-                
-                sevName += suffix;
+                  if (q === 'Maj') suffix = 'maj7';
+                  if (q === 'm') suffix = 'm7';
+                  if (q === 'dim') suffix = 'm7b5';
 
-                const isTriadActive = selection.rootVal === rootVal && selection.quality === q && selection.type === 'triad';
-                const isSeventhActive = selection.rootVal === rootVal && selection.quality === q && selection.type === '7th';
+                  if (keyType === 'major' && i === 4) suffix = '7';
+                  if (keyType === 'major' && i === 6) suffix = 'm7b5';
+                  if (keyType === 'minor' && i === 1) suffix = 'm7b5';
+                  if (keyType === 'minor' && i === 2) suffix = 'maj7';
+                  if (keyType === 'minor' && i === 4) suffix = 'm7';
+                  if (keyType === 'minor' && i === 6) suffix = '7';
+                  
+                  sevName += suffix;
 
-                return (
-                  <div key={i} className="mb-4">
-                    <div className="text-[13px] font-bold text-[#343a40] mb-2 flex items-center">
-                       <span><span className="text-[#d90429] font-black mr-1.5">{ROMANS[i]}</span>{q}</span>
+                  const isTriadActive = selection.rootVal === rootVal && selection.quality === q && selection.type === 'triad';
+                  const isSeventhActive = selection.rootVal === rootVal && selection.quality === q && selection.type === '7th';
+
+                  return (
+                    <div key={i} className="mb-4">
+                      <div className="text-[13px] font-bold text-[#343a40] mb-2 flex items-center">
+                         <span><span className="text-[#d90429] font-black mr-1.5">{ROMANS[i]}</span>{q}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                         <button
+                           onClick={() => selectChord(rootVal, q, 'triad', isTriadActive)}
+                           className={`
+                             p-3 border rounded-lg text-[15px] font-semibold transition-all select-none
+                             ${isTriadActive 
+                               ? 'bg-[#2b2d42] text-white border-[#2b2d42] shadow-lg' 
+                               : 'bg-white border-[#dee2e6] text-[#495057] hover:border-[#adb5bd] hover:-translate-y-px'
+                             }
+                           `}
+                         >
+                           {triName}
+                         </button>
+                         <button
+                           onClick={() => selectChord(rootVal, q, '7th', isSeventhActive)}
+                           className={`
+                             p-3 border rounded-lg text-[15px] font-semibold transition-all select-none
+                             ${isSeventhActive
+                               ? 'bg-[#2b2d42] text-white border-[#2b2d42] shadow-lg' 
+                               : 'bg-white border-[#dee2e6] text-[#495057] hover:border-[#adb5bd] hover:-translate-y-px'
+                             }
+                           `}
+                         >
+                           {sevName}
+                         </button>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                       <button
-                         onClick={() => selectChord(rootVal, q, 'triad', isTriadActive)}
-                         className={`
-                           p-3 border rounded-lg text-[15px] font-semibold transition-all select-none
-                           ${isTriadActive 
-                             ? 'bg-[#2b2d42] text-white border-[#2b2d42] shadow-lg' 
-                             : 'bg-white border-[#dee2e6] text-[#495057] hover:border-[#adb5bd] hover:-translate-y-px'
-                           }
-                         `}
-                       >
-                         {triName}
-                       </button>
-                       <button
-                         onClick={() => selectChord(rootVal, q, '7th', isSeventhActive)}
-                         className={`
-                           p-3 border rounded-lg text-[15px] font-semibold transition-all select-none
-                           ${isSeventhActive
-                             ? 'bg-[#2b2d42] text-white border-[#2b2d42] shadow-lg' 
-                             : 'bg-white border-[#dee2e6] text-[#495057] hover:border-[#adb5bd] hover:-translate-y-px'
-                           }
-                         `}
-                       >
-                         {sevName}
-                       </button>
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -578,7 +601,7 @@ export default function App() {
       {/* --- RIGHT MAIN PANEL --- */}
       <div className="flex-1 flex flex-col items-center p-8 relative h-full overflow-y-auto">
         
-        <div className="bg-white px-10 py-5 rounded-2xl w-[480px] shadow-[0_10px_40px_rgba(0,0,0,0.06)] mb-8 text-center shrink-0">
+        <div className="bg-white px-10 py-5 rounded-2xl w-full max-w-[480px] shadow-[0_10px_40px_rgba(0,0,0,0.06)] mb-8 text-center shrink-0">
           <div className="text-[42px] font-black text-[#d90429] leading-tight mb-1 min-h-[46px]">
             {analyzedChord.main}
           </div>
@@ -591,12 +614,24 @@ export default function App() {
           <div className={`text-[10px] mt-1.5 uppercase tracking-widest ${midiConnected ? 'text-[#d90429] font-bold' : 'text-[#aaa]'}`}>
              {midiConnected ? '● MIDI Connected' : 'MIDI Device: Scanning...'}
           </div>
-          <div className="mt-4">
+          <div className="mt-4 flex gap-3 justify-center">
              <button 
                onClick={resetAll}
                className="px-5 py-2 bg-[#2b2d42] text-white rounded-md text-xs font-bold hover:bg-[#1a1c29] transition-colors"
              >
                RESET GRAPH
+             </button>
+             <button 
+               onClick={() => setOctaveExpanded(!octaveExpanded)}
+               className={`
+                 px-5 py-2 rounded-md text-xs font-bold transition-all
+                 ${octaveExpanded 
+                   ? 'bg-[#0077b6] text-white shadow-[0_0_15px_rgba(0,119,182,0.4)]' 
+                   : 'bg-white border border-[#ced4da] text-[#495057] hover:bg-[#f8f9fa]'
+                 }
+               `}
+             >
+               OCTAVE
              </button>
           </div>
         </div>
@@ -622,6 +657,7 @@ export default function App() {
                  {LEFT_COL.map((h) => {
                    const noteVal = currentKeyNotes[h.degIndex];
                    const isActive = activeHoleIds.has(h.id);
+                   const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
                    const noteName = getDisplayNote(noteVal, keyRoot, keyType);
 
                    return (
@@ -633,19 +669,21 @@ export default function App() {
                          hover:scale-110 hover:bg-[#f8f9fa]
                          ${isActive 
                             ? 'border-[#d90429] bg-[#ffe3e3] shadow-[0_0_15px_rgba(217,4,41,0.3)]' 
-                            : 'border-[#2b2d42] bg-white'
+                            : isOctaveActive
+                              ? 'border-[#0077b6] bg-[#e0f2fe] shadow-[0_0_15px_rgba(0,119,182,0.3)]'
+                              : 'border-[#2b2d42] bg-white'
                          }
                        `}
                      >
                        <div className="pointer-events-none text-center leading-none">
                          <span className={`
                            font-extrabold text-[20px] transition-colors
-                           ${isActive ? '!text-[#d90429]' : ''}
+                           ${isActive ? '!text-[#d90429]' : isOctaveActive ? '!text-[#0077b6]' : ''}
                            ${h.colorClass === 'num-blue' ? 'text-[#0077b6]' : h.colorClass === 'num-green' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}
                          `}>
                            {h.label}
                          </span>
-                         <span className={`block text-[11px] font-bold -mt-0.5 ${isActive ? 'text-[#d90429]' : 'text-[#adb5bd]'}`}>
+                         <span className={`block text-[11px] font-bold -mt-0.5 ${isActive ? 'text-[#d90429]' : isOctaveActive ? 'text-[#0077b6]' : 'text-[#adb5bd]'}`}>
                            {noteName}
                          </span>
                        </div>
@@ -658,6 +696,7 @@ export default function App() {
                  {RIGHT_COL.map((h) => {
                    const noteVal = currentKeyNotes[h.degIndex];
                    const isActive = activeHoleIds.has(h.id);
+                   const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
                    const noteName = getDisplayNote(noteVal, keyRoot, keyType);
 
                    return (
@@ -669,19 +708,21 @@ export default function App() {
                          hover:scale-110 hover:bg-[#f8f9fa]
                          ${isActive 
                             ? 'border-[#d90429] bg-[#ffe3e3] shadow-[0_0_15px_rgba(217,4,41,0.3)]' 
-                            : 'border-[#2b2d42] bg-white'
+                            : isOctaveActive
+                              ? 'border-[#0077b6] bg-[#e0f2fe] shadow-[0_0_15px_rgba(0,119,182,0.3)]'
+                              : 'border-[#2b2d42] bg-white'
                          }
                        `}
                      >
                        <div className="pointer-events-none text-center leading-none">
                          <span className={`
                            font-extrabold text-[20px] transition-colors
-                           ${isActive ? '!text-[#d90429]' : ''}
+                           ${isActive ? '!text-[#d90429]' : isOctaveActive ? '!text-[#0077b6]' : ''}
                            ${h.colorClass === 'num-blue' ? 'text-[#0077b6]' : h.colorClass === 'num-green' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}
                          `}>
                            {h.label}
                          </span>
-                         <span className={`block text-[11px] font-bold -mt-0.5 ${isActive ? 'text-[#d90429]' : 'text-[#adb5bd]'}`}>
+                         <span className={`block text-[11px] font-bold -mt-0.5 ${isActive ? 'text-[#d90429]' : isOctaveActive ? 'text-[#0077b6]' : 'text-[#adb5bd]'}`}>
                            {noteName}
                          </span>
                        </div>
