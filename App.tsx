@@ -167,11 +167,13 @@ export default function App() {
 
     const targetVals = [...new Set(intervals.map(i => (root + i) % 12))];
     
-    // Convert target note values back to all matching hole IDs
+    // Convert target note values back to matching hole IDs
+    // USER REQUEST: Only light up the 'num' (black numbers) holes by default for sidebar chord selection
     const newHoleIds = new Set<string>();
     ALL_HOLES.forEach(h => {
       const noteVal = currentKeyNotes[h.degIndex];
-      if (targetVals.includes(noteVal)) {
+      // Only include 'num' class holes (black text) to target the primary register
+      if (targetVals.includes(noteVal) && h.colorClass === 'num') {
         newHoleIds.add(h.id);
       }
     });
