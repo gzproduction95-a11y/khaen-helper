@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { KHAEN_16_PIPES, LEFT_PIPES, RIGHT_PIPES } from './domain/instruments/khaen16';
+import { displayNote, parseNote } from './domain/theory/notes';
+import { buildScale } from './domain/theory/scales';
+import type { KeyRoot, PitchClass, ScaleType } from './domain/theory/types';
 
 // === CONSTANTS & TYPES ===
 
-const SHARPS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const FLATS  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 const ROMANS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
 
-type ScaleType = 'major' | 'minor';
+type UiScaleType = 'major' | 'minor';
 type Modifier = 'add9' | 'add11' | 'add13' | 'add6' | 'no3' | 'no5' | 'sus4' | 'sus2' | 'aug' | 'dim_mod';
 
 interface ChordSelection {
@@ -20,33 +21,16 @@ interface ChordSelection {
 
 // Data from HTML logic
 const SCALES = {
-  'major': { intervals: [0, 2, 4, 5, 7, 9, 11], qualities: ['Maj', 'm', 'm', 'Maj', 'Maj', 'm', 'dim'] },
-  'minor': { intervals: [0, 2, 3, 5, 7, 8, 10], qualities: ['m', 'dim', 'Maj', 'm', 'm', 'Maj', 'Maj'] }
+  major: { qualities: ['Maj', 'm', 'm', 'Maj', 'Maj', 'm', 'dim'] },
+  minor: { qualities: ['m', 'dim', 'Maj', 'm', 'm', 'Maj', 'Maj'] },
 };
-
-// === UTILITIES ===
-
-function getNoteVal(name: string): number {
-  if (!name) return -1;
-  let n = name.charAt(0).toUpperCase() + name.slice(1);
-  let idx = SHARPS.indexOf(n);
-  if (idx === -1) idx = FLATS.indexOf(n);
-  return idx;
-}
-
-function getDisplayNote(val: number, keyRoot: string, keyType: ScaleType): string {
-  const root = keyRoot;
-  const useFlat = (['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb'].includes(root)) ||
-                  (keyType === 'minor' && ['C', 'F', 'Bb', 'Eb', 'G', 'D'].includes(root));
-  return useFlat ? FLATS[val % 12] : SHARPS[val % 12];
-}
 
 // === MAIN COMPONENT ===
 
 export default function App() {
   // State
-  const [keyRoot, setKeyRoot] = useState<string>('A');
-  const [keyType, setKeyType] = useState<ScaleType>('minor');
+  const [keyRoot, setKeyRoot] = useState<KeyRoot>('A');
+  const [keyType, setKeyType] = useState<UiScaleType>('minor');
   const [activeHoleIds, setActiveHoleIds] = useState<Set<string>>(new Set());
   const [hintRoot, setHintRoot] = useState<number | null>(null);
   const [octaveExpanded, setOctaveExpanded] = useState<boolean>(false);
@@ -62,9 +46,7 @@ export default function App() {
 
   // Derived State: Current Key Notes
   const currentKeyNotes = useMemo(() => {
-    const rootVal = getNoteVal(keyRoot);
-    const intervals = SCALES[keyType].intervals;
-    return intervals.map(i => (rootVal + i) % 12);
+    return buildScale(keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
   }, [keyRoot, keyType]);
 
   // Derived State: Active Note Values for Analysis
@@ -97,7 +79,7 @@ export default function App() {
     else if (q === 'dim') { intervals.push(3); intervals.push(6); }
 
     // 7ths
-    const degreeIdx = currentKeyNotes.indexOf(root);
+    const degreeIdx = currentKeyNotes.indexOf(root as PitchClass);
     if (degreeIdx !== -1 && type === '7th') {
           const deg3 = currentKeyNotes[(degreeIdx + 2) % 7];
           const deg5 = currentKeyNotes[(degreeIdx + 4) % 7];
@@ -158,14 +140,15 @@ export default function App() {
     const unique = [...activeNoteValues].sort((a, b) => a - b);
     if (unique.length === 0) return { main: '-', sub: 'Ready', notes: '-' };
 
-    const noteNames = unique.map(v => getDisplayNote(v, keyRoot, keyType));
+    const theoryType: ScaleType = keyType === 'minor' ? 'natural-minor' : 'major';
+    const noteNames = unique.map(v => displayNote(v as PitchClass, keyRoot, theoryType));
     
     // Candidates generation
     const candidates: { root: number, name: string }[] = [];
 
     for (let i = 0; i < unique.length; i++) {
       const rVal = unique[i];
-      const rName = getDisplayNote(rVal, keyRoot, keyType);
+      const rName = displayNote(rVal as PitchClass, keyRoot, theoryType);
       const ints = new Set(unique.map(v => (v - rVal + 12) % 12));
 
       let name = "";
@@ -253,11 +236,11 @@ export default function App() {
             if (a.root === hintRoot && b.root !== hintRoot) return -1;
             if (b.root === hintRoot && a.root !== hintRoot) return 1;
         }
-        const keyVal = getNoteVal(keyRoot);
+        const keyVal = parseNote(keyRoot);
         if (a.root === keyVal && b.root !== keyVal) return -1;
         if (b.root === keyVal && a.root !== keyVal) return 1;
-        const aIn = currentKeyNotes.includes(a.root);
-        const bIn = currentKeyNotes.includes(b.root);
+        const aIn = currentKeyNotes.includes(a.root as PitchClass);
+        const bIn = currentKeyNotes.includes(b.root as PitchClass);
         if (aIn && !bIn) return -1;
         if (bIn && !aIn) return 1;
         return a.name.length - b.name.length;
@@ -445,7 +428,7 @@ export default function App() {
               <select 
                 value={keyRoot}
                 onChange={(e) => {
-                  setKeyRoot(e.target.value);
+                  setKeyRoot(e.target.value as KeyRoot);
                   resetAll();
                 }}
                 className="flex-1 p-2 text-sm border border-[#ced4da] rounded-md bg-white cursor-pointer text-[#495057] focus:outline-none focus:ring-2 focus:ring-[#2b2d42]"
@@ -458,7 +441,7 @@ export default function App() {
               <select 
                 value={keyType}
                 onChange={(e) => {
-                  setKeyType(e.target.value as ScaleType);
+                  setKeyType(e.target.value as UiScaleType);
                   resetAll();
                 }}
                 className="flex-1 p-2 text-sm border border-[#ced4da] rounded-md bg-white cursor-pointer text-[#495057] focus:outline-none focus:ring-2 focus:ring-[#2b2d42]"
@@ -505,7 +488,7 @@ export default function App() {
                 {currentKeyNotes.map((rootVal, i) => {
                   const qualities = SCALES[keyType].qualities;
                   const q = qualities[i];
-                  const noteName = getDisplayNote(rootVal, keyRoot, keyType);
+                  const noteName = displayNote(rootVal as PitchClass, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
                   
                   let triName = noteName + (q === 'm' ? 'm' : (q === 'dim' ? 'dim' : ''));
                   let sevName = noteName;
@@ -627,7 +610,7 @@ export default function App() {
                    const noteVal = currentKeyNotes[h.degreeIndex];
                    const isActive = activeHoleIds.has(h.id);
                    const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
-                   const noteName = getDisplayNote(noteVal, keyRoot, keyType);
+                   const noteName = displayNote(noteVal as PitchClass, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
 
                    return (
                      <div 
@@ -666,7 +649,7 @@ export default function App() {
                    const noteVal = currentKeyNotes[h.degreeIndex];
                    const isActive = activeHoleIds.has(h.id);
                    const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
-                   const noteName = getDisplayNote(noteVal, keyRoot, keyType);
+                   const noteName = displayNote(noteVal as PitchClass, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
 
                    return (
                      <div 
