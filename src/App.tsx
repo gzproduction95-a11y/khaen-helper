@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { KHAEN_16_PIPES, LEFT_PIPES, RIGHT_PIPES } from './domain/instruments/khaen16';
-import { displayNote, parseNote } from './domain/theory/notes';
+import { displayNote } from './domain/theory/notes';
 import { buildScale } from './domain/theory/scales';
 import { buildChordPitchClasses, buildDiatonicChordChoices } from './domain/theory/chords';
+import { analyzeChord } from './domain/theory/analyzeChord';
 import type { KeyRoot, PitchClass, ScaleType } from './domain/theory/types';
 
 // === CONSTANTS & TYPES ===
@@ -89,126 +90,18 @@ export default function App() {
 
   // === LOGIC: Chord Analysis ===
   const analyzedChord = useMemo(() => {
-    const unique = [...activeNoteValues].sort((a, b) => a - b);
-    if (unique.length === 0) return { main: '-', sub: 'Ready', notes: '-' };
-
     const theoryType: ScaleType = keyType === 'minor' ? 'natural-minor' : 'major';
-    const noteNames = unique.map(v => displayNote(v as PitchClass, keyRoot, theoryType));
-    
-    // Candidates generation
-    const candidates: { root: number, name: string }[] = [];
-
-    for (let i = 0; i < unique.length; i++) {
-      const rVal = unique[i];
-      const ints = new Set(unique.map(v => (v - rVal + 12) % 12));
-
-      let name = "";
-      let baseType = "";
-      let valid = false;
-
-      const hasM3 = ints.has(4);
-      const hasm3 = ints.has(3);
-      const hasP5 = ints.has(7);
-      const hasd5 = ints.has(6);
-      const hasAug5 = ints.has(8);
-      const hasP4 = ints.has(5);
-      const hasM2 = ints.has(2);
-      const rName = displayNote(rVal as PitchClass, keyRoot, theoryType);
-
-      if (hasm3 && hasd5 && !hasP5) { baseType = "dim"; valid = true; }
-      else if (hasm3 && hasP5) { baseType = "m"; valid = true; }
-      else if (hasM3 && hasAug5) { baseType = "aug"; valid = true; }
-      else if (hasM3 && hasP5) { baseType = "Maj"; valid = true; }
-      else if (hasP4 && hasP5 && !hasm3 && !hasM3) { baseType = "sus4"; valid = true; }
-      else if (hasM2 && hasP5 && !hasm3 && !hasM2) { baseType = "sus2"; valid = true; }
-      else if (!hasP5 && !hasd5 && !hasAug5) {
-          if (hasM3) { baseType = "no5Maj"; valid = true; }
-          else if (hasm3) { baseType = "no5m"; valid = true; }
-      }
-      else if (hasP5 && ints.size === 2) { baseType = "5"; valid = true; }
-
-      if (!valid) continue;
-
-      const hasm7 = ints.has(10);
-      const hasM7 = ints.has(11);
-      const hasdim7 = ints.has(9); 
-
-      name = rName;
-
-      if (hasm7) { 
-          if (baseType === "Maj" || baseType === "no5Maj") name += "7"; 
-          else if (baseType === "m" || baseType === "no5m") name += "m7";
-          else if (baseType === "dim") name += "m7b5"; 
-          else if (baseType === "sus4") name += "7sus4"; 
-          else if (baseType === "sus2") name += "7sus2";
-          else if (baseType === "aug") name += "7(#5)";
-      } else if (hasM7) { 
-          if (baseType === "m" || baseType === "no5m") name += "m(maj7)";
-          else if (baseType === "aug") name += "maj7(#5)";
-          else name += "maj7"; 
-      } else if (hasdim7 && baseType === "dim") {
-          name += "dim7";
-      } else {
-          if (baseType === "m") name += "m";
-          else if (baseType === "dim") name += "dim";
-          else if (baseType === "aug") name += "aug";
-          else if (baseType === "sus4") name += "sus4";
-          else if (baseType === "sus2") name += "sus2";
-          else if (baseType === "5") name += "5";
-          else if (baseType === "no5m") name += "m"; 
-      }
-
-      const has7th = (hasm7 || hasM7 || (hasdim7 && baseType === "dim"));
-
-      if (ints.has(2) && baseType !== "sus2") {
-          if (has7th) name = name.replace("7", "9"); 
-          else name += "(add9)";
-      }
-      if (ints.has(5) && baseType !== "sus4") {
-           name += "(add11)"; 
-      }
-      if (ints.has(9) && !hasm7 && !hasM7 && !name.includes("dim7")) {
-          if (has7th) name = name.replace("7", "13");
-          else {
-              if (baseType === "Maj" || baseType === "no5Maj") name += "6"; 
-              else if (baseType === "m" || baseType === "no5m") name += "6"; 
-              else name += "(add13)";
-          }
-      }
-
-      if (baseType === "no5Maj" || baseType === "no5m") name += "(no5)";
-
-      candidates.push({ root: rVal, name });
-    }
-
-    // Ranking
-    if (candidates.length > 0) {
-      candidates.sort((a, b) => {
-        if (hintRoot !== null) {
-            if (a.root === hintRoot && b.root !== hintRoot) return -1;
-            if (b.root === hintRoot && a.root !== hintRoot) return 1;
-        }
-        const keyVal = parseNote(keyRoot);
-        if (a.root === keyVal && b.root !== keyVal) return -1;
-        if (b.root === keyVal && a.root !== keyVal) return 1;
-        const aIn = currentKeyNotes.includes(a.root as PitchClass);
-        const bIn = currentKeyNotes.includes(b.root as PitchClass);
-        if (aIn && !bIn) return -1;
-        if (bIn && !aIn) return 1;
-        return a.name.length - b.name.length;
-      });
-
-      const best = candidates[0];
-      const others = candidates.slice(1).map(c => c.name);
-      return { 
-        main: best.name, 
-        sub: others.length ? "Or: " + others.join(" / ") : "Exact Match",
-        notes: "Notes: " + noteNames.join(" - ")
-      };
-    }
-
-    return { main: '?', sub: 'Unknown Shape', notes: "Notes: " + noteNames.join(" - ") };
-
+    const analysis = analyzeChord(activeNoteValues as PitchClass[], {
+      keyRoot, scaleType: theoryType, rootHint: hintRoot as PitchClass | null,
+    });
+    return {
+      main: analysis.main,
+      sub: analysis.status === 'ready'
+        ? 'Ready'
+        : analysis.alternatives.length ? `Or: ${analysis.alternatives.join(' / ')}`
+          : analysis.status === 'unknown' ? 'Unknown Shape' : 'Exact Match',
+      notes: analysis.notes.length ? `Notes: ${analysis.notes.join(' - ')}` : '-',
+    };
   }, [activeNoteValues, hintRoot, keyRoot, keyType, currentKeyNotes]);
 
 
