@@ -3,9 +3,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { KHAEN_16_PIPES, LEFT_PIPES, RIGHT_PIPES } from './domain/instruments/khaen16';
 import { displayNote } from './domain/theory/notes';
 import { buildScale } from './domain/theory/scales';
-import { buildChordPitchClasses, buildDiatonicChordChoices } from './domain/theory/chords';
+import { buildDiatonicChordChoices } from './domain/theory/chords';
 import { analyzeChord } from './domain/theory/analyzeChord';
-import type { KeyRoot, PitchClass, ScaleType } from './domain/theory/types';
+import { alternatePipesForPitchClasses, primaryPipesForChord, selectedPipePitchClasses } from './domain/khaenMapping';
+import type { ChordModifier, ChordQuality, KeyRoot, PitchClass, ScaleType } from './domain/theory/types';
 
 // === CONSTANTS & TYPES ===
 
@@ -48,15 +49,12 @@ export default function App() {
 
   // Derived State: Active Note Values for Analysis
   const activeNoteValues = useMemo(() => {
-    const notes = new Set<number>();
-    activeHoleIds.forEach(id => {
-      const hole = KHAEN_16_PIPES.find(h => h.id === id);
-      if (hole) {
-        notes.add(currentKeyNotes[hole.degreeIndex]);
-      }
-    });
-    return [...notes];
-  }, [activeHoleIds, currentKeyNotes]);
+    return selectedPipePitchClasses([...activeHoleIds], keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
+  }, [activeHoleIds, keyRoot, keyType]);
+
+  const octavePipeIds = useMemo(() => new Set(alternatePipesForPitchClasses(
+    activeNoteValues, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major',
+  )), [activeNoteValues, keyRoot, keyType]);
 
   // === LOGIC: Compute Active Holes from Selection ===
   useEffect(() => {
@@ -65,28 +63,26 @@ export default function App() {
     }
 
     const root = selection.rootVal;
-    const quality = selection.quality === 'Maj' ? 'major' : selection.quality === 'm' ? 'minor' : 'diminished';
-    const modifiers = new Set([...selection.modifiers].map(mod => mod === 'dim_mod' ? 'dim' : mod));
-    const targetVals = buildChordPitchClasses({
+    const quality: ChordQuality = selection.quality === 'Maj' ? 'major' : selection.quality === 'm' ? 'minor' : 'diminished';
+    const modifiers = new Set([...selection.modifiers].map(mod => (mod === 'dim_mod' ? 'dim' : mod) as ChordModifier));
+    const pipeIds = primaryPipesForChord({
+      keyRoot,
+      scaleType: keyType === 'minor' ? 'natural-minor' : 'major',
+      chord: {
       root: root as PitchClass,
       quality,
       type: selection.type === '7th' ? 'seventh' : 'triad',
       modifiers,
+      },
     });
     
     // Default selection: only 'num' holes
-    const newHoleIds = new Set<string>();
-    KHAEN_16_PIPES.forEach(h => {
-      const noteVal = currentKeyNotes[h.degreeIndex];
-      if (targetVals.includes(noteVal) && h.displayGroup === 'primary') {
-        newHoleIds.add(h.id);
-      }
-    });
+    const newHoleIds = new Set(pipeIds);
 
     setActiveHoleIds(newHoleIds);
     setHintRoot(root);
 
-  }, [selection, currentKeyNotes, keyType]);
+  }, [selection, currentKeyNotes, keyRoot, keyType]);
 
   // === LOGIC: Chord Analysis ===
   const analyzedChord = useMemo(() => {
@@ -438,7 +434,7 @@ export default function App() {
                  {LEFT_PIPES.map((h) => {
                    const noteVal = currentKeyNotes[h.degreeIndex];
                    const isActive = activeHoleIds.has(h.id);
-                   const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
+                   const isOctaveActive = !isActive && octaveExpanded && octavePipeIds.has(h.id);
                    const noteName = displayNote(noteVal as PitchClass, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
 
                    return (
@@ -477,7 +473,7 @@ export default function App() {
                  {RIGHT_PIPES.map((h) => {
                    const noteVal = currentKeyNotes[h.degreeIndex];
                    const isActive = activeHoleIds.has(h.id);
-                   const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
+                   const isOctaveActive = !isActive && octaveExpanded && octavePipeIds.has(h.id);
                    const noteName = displayNote(noteVal as PitchClass, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
 
                    return (
