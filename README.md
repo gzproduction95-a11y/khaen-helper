@@ -1,20 +1,36 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Khaen Logic
 
-# Run and deploy your AI Studio app
+A browser-based tool for composing and practicing on the verified 16-pipe Khaen layout. It displays scale notes, diatonic chords, selected pipes, and pitch-class chord analysis, with optional Web MIDI input.
 
-This contains everything you need to run your app locally.
+The app is client-only: it requires no API server, account, database, API key, or environment variables. It supports major and natural-minor keys for the single 16-pipe layout represented in the app.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1-86czk0jWzFdhj5o26Yihl73s1qXxvH5
+## Requirements
 
-## Run Locally
+- Node.js 22.12 or newer
+- npm
 
-**Prerequisites:**  Node.js
+## Run locally
 
+```sh
+npm ci
+npm run dev
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Open the local URL printed by Vite (normally `http://localhost:5173`). Web MIDI is optional; browser support and secure-context requirements vary. Mouse and touch controls work without MIDI.
+
+## Quality checks
+
+```sh
+npm test
+npm run build
+```
+
+The production-ready static site is written to `dist/`. To serve that output locally:
+
+```sh
+npm run preview
+```
+
+## Deploy
+
+The repository can be deployed as a static site to Vercel or Cloudflare Pages. Use `npm run build` as the build command and `dist` as the output directory. No environment variables or server-side functions are needed.
