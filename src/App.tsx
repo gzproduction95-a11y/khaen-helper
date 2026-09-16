@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { KHAEN_16_PIPES, LEFT_PIPES, RIGHT_PIPES } from './domain/instruments/khaen16';
 
 // === CONSTANTS & TYPES ===
 
@@ -22,38 +23,6 @@ const SCALES = {
   'major': { intervals: [0, 2, 4, 5, 7, 9, 11], qualities: ['Maj', 'm', 'm', 'Maj', 'Maj', 'm', 'dim'] },
   'minor': { intervals: [0, 2, 3, 5, 7, 8, 10], qualities: ['m', 'dim', 'Maj', 'm', 'm', 'Maj', 'Maj'] }
 };
-
-// Khaen Layout based on HTML structure
-interface HoleConfig {
-  id: string;
-  degIndex: number; // Index in the 7-note scale (0-6)
-  label: string;
-  colorClass: 'num' | 'num-blue' | 'num-green';
-}
-
-const LEFT_COL: HoleConfig[] = [
-  { id: 'L8', degIndex: 6, label: '7', colorClass: 'num-blue' },
-  { id: 'L7', degIndex: 5, label: '6', colorClass: 'num-blue' },
-  { id: 'L6', degIndex: 6, label: '7', colorClass: 'num' },
-  { id: 'L5', degIndex: 5, label: '6', colorClass: 'num' },
-  { id: 'L4', degIndex: 4, label: '5', colorClass: 'num' },
-  { id: 'L3', degIndex: 3, label: '4', colorClass: 'num' },
-  { id: 'L2', degIndex: 1, label: '2', colorClass: 'num' },
-  { id: 'L1', degIndex: 2, label: '3', colorClass: 'num-blue' },
-];
-
-const RIGHT_COL: HoleConfig[] = [
-  { id: 'R8', degIndex: 0, label: '1', colorClass: 'num-green' },
-  { id: 'R7', degIndex: 4, label: '5', colorClass: 'num-blue' },
-  { id: 'R6', degIndex: 3, label: '4', colorClass: 'num-blue' },
-  { id: 'R5', degIndex: 1, label: '2', colorClass: 'num-blue' },
-  { id: 'R4', degIndex: 0, label: '1', colorClass: 'num-blue' },
-  { id: 'R3', degIndex: 6, label: '7', colorClass: 'num' },
-  { id: 'R2', degIndex: 2, label: '3', colorClass: 'num' },
-  { id: 'R1', degIndex: 0, label: '1', colorClass: 'num' },
-];
-
-const ALL_HOLES = [...LEFT_COL, ...RIGHT_COL];
 
 // === UTILITIES ===
 
@@ -102,9 +71,9 @@ export default function App() {
   const activeNoteValues = useMemo(() => {
     const notes = new Set<number>();
     activeHoleIds.forEach(id => {
-      const hole = ALL_HOLES.find(h => h.id === id);
+      const hole = KHAEN_16_PIPES.find(h => h.id === id);
       if (hole) {
-        notes.add(currentKeyNotes[hole.degIndex]);
+        notes.add(currentKeyNotes[hole.degreeIndex]);
       }
     });
     return [...notes];
@@ -172,9 +141,9 @@ export default function App() {
     
     // Default selection: only 'num' holes
     const newHoleIds = new Set<string>();
-    ALL_HOLES.forEach(h => {
-      const noteVal = currentKeyNotes[h.degIndex];
-      if (targetVals.includes(noteVal) && h.colorClass === 'num') {
+    KHAEN_16_PIPES.forEach(h => {
+      const noteVal = currentKeyNotes[h.degreeIndex];
+      if (targetVals.includes(noteVal) && h.displayGroup === 'primary') {
         newHoleIds.add(h.id);
       }
     });
@@ -326,8 +295,8 @@ export default function App() {
         setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
         setActiveHoleIds(prev => {
           const next = new Set(prev);
-          ALL_HOLES.forEach(h => {
-             if (currentKeyNotes[h.degIndex] === noteVal) next.add(h.id);
+          KHAEN_16_PIPES.forEach(h => {
+             if (currentKeyNotes[h.degreeIndex] === noteVal) next.add(h.id);
           });
           return next;
         });
@@ -335,8 +304,8 @@ export default function App() {
         setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
         setActiveHoleIds(prev => {
           const next = new Set(prev);
-          ALL_HOLES.forEach(h => {
-            if (currentKeyNotes[h.degIndex] === noteVal) next.delete(h.id);
+          KHAEN_16_PIPES.forEach(h => {
+            if (currentKeyNotes[h.degreeIndex] === noteVal) next.delete(h.id);
           });
           return next;
         });
@@ -654,8 +623,8 @@ export default function App() {
               <div className="absolute -top-[25px] left-1/2 -translate-x-1/2 w-[60px] h-[25px] border-[4px] border-b-0 border-[#2b2d42] bg-white -z-10"></div>
               
               <div className="flex flex-col justify-between h-full w-[50px] items-center">
-                 {LEFT_COL.map((h) => {
-                   const noteVal = currentKeyNotes[h.degIndex];
+                 {LEFT_PIPES.map((h) => {
+                   const noteVal = currentKeyNotes[h.degreeIndex];
                    const isActive = activeHoleIds.has(h.id);
                    const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
                    const noteName = getDisplayNote(noteVal, keyRoot, keyType);
@@ -663,7 +632,7 @@ export default function App() {
                    return (
                      <div 
                        key={h.id}
-                       onClick={() => handleHoleClick(h.id, h.degIndex)}
+                       onClick={() => handleHoleClick(h.id, h.degreeIndex)}
                        className={`
                          w-[46px] h-[46px] border-[2px] rounded-full flex justify-center items-center cursor-pointer relative transition-all duration-100
                          hover:scale-110 hover:bg-[#f8f9fa]
@@ -679,7 +648,7 @@ export default function App() {
                          <span className={`
                            font-extrabold text-[20px] transition-colors
                            ${isActive ? '!text-[#d90429]' : isOctaveActive ? '!text-[#0077b6]' : ''}
-                           ${h.colorClass === 'num-blue' ? 'text-[#0077b6]' : h.colorClass === 'num-green' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}
+                           ${h.displayGroup === 'alternate' ? 'text-[#0077b6]' : h.displayGroup === 'top-tonic' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}
                          `}>
                            {h.label}
                          </span>
@@ -693,8 +662,8 @@ export default function App() {
               </div>
 
               <div className="flex flex-col justify-between h-full w-[50px] items-center">
-                 {RIGHT_COL.map((h) => {
-                   const noteVal = currentKeyNotes[h.degIndex];
+                 {RIGHT_PIPES.map((h) => {
+                   const noteVal = currentKeyNotes[h.degreeIndex];
                    const isActive = activeHoleIds.has(h.id);
                    const isOctaveActive = !isActive && octaveExpanded && activeNoteValues.includes(noteVal);
                    const noteName = getDisplayNote(noteVal, keyRoot, keyType);
@@ -702,7 +671,7 @@ export default function App() {
                    return (
                      <div 
                        key={h.id}
-                       onClick={() => handleHoleClick(h.id, h.degIndex)}
+                       onClick={() => handleHoleClick(h.id, h.degreeIndex)}
                        className={`
                          w-[46px] h-[46px] border-[2px] rounded-full flex justify-center items-center cursor-pointer relative transition-all duration-100
                          hover:scale-110 hover:bg-[#f8f9fa]
@@ -718,7 +687,7 @@ export default function App() {
                          <span className={`
                            font-extrabold text-[20px] transition-colors
                            ${isActive ? '!text-[#d90429]' : isOctaveActive ? '!text-[#0077b6]' : ''}
-                           ${h.colorClass === 'num-blue' ? 'text-[#0077b6]' : h.colorClass === 'num-green' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}
+                           ${h.displayGroup === 'alternate' ? 'text-[#0077b6]' : h.displayGroup === 'top-tonic' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}
                          `}>
                            {h.label}
                          </span>
