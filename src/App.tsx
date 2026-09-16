@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { KHAEN_16_PIPES, LEFT_PIPES, RIGHT_PIPES } from './domain/instruments/khaen16';
 import { displayNote, parseNote } from './domain/theory/notes';
 import { buildScale } from './domain/theory/scales';
+import { buildChordPitchClasses, buildDiatonicChordChoices } from './domain/theory/chords';
 import type { KeyRoot, PitchClass, ScaleType } from './domain/theory/types';
 
 // === CONSTANTS & TYPES ===
@@ -20,11 +21,6 @@ interface ChordSelection {
 }
 
 // Data from HTML logic
-const SCALES = {
-  major: { qualities: ['Maj', 'm', 'm', 'Maj', 'Maj', 'm', 'dim'] },
-  minor: { qualities: ['m', 'dim', 'Maj', 'm', 'm', 'Maj', 'Maj'] },
-};
-
 // === MAIN COMPONENT ===
 
 export default function App() {
@@ -68,58 +64,14 @@ export default function App() {
     }
 
     const root = selection.rootVal;
-    const q = selection.quality;
-    const type = selection.type;
-    const modifiers = selection.modifiers;
-    let intervals = [0];
-
-    // Base Triad
-    if (q === 'Maj') { intervals.push(4); intervals.push(7); }
-    else if (q === 'm') { intervals.push(3); intervals.push(7); }
-    else if (q === 'dim') { intervals.push(3); intervals.push(6); }
-
-    // 7ths
-    const degreeIdx = currentKeyNotes.indexOf(root as PitchClass);
-    if (degreeIdx !== -1 && type === '7th') {
-          const deg3 = currentKeyNotes[(degreeIdx + 2) % 7];
-          const deg5 = currentKeyNotes[(degreeIdx + 4) % 7];
-          const deg7 = currentKeyNotes[(degreeIdx + 6) % 7];
-          
-           intervals = [0, 
-            (deg3 - root + 12) % 12, 
-            (deg5 - root + 12) % 12, 
-            (deg7 - root + 12) % 12
-          ];
-    }
-
-    // Modifiers Logic
-    if (modifiers.has('no3')) intervals = intervals.filter(i => i !== 3 && i !== 4);
-    if (modifiers.has('no5')) intervals = intervals.filter(i => i !== 7 && i !== 6);
-    
-    if (modifiers.has('sus4')) { 
-      intervals.push(5); 
-      intervals = intervals.filter(i => i !== 3 && i !== 4); 
-    }
-    if (modifiers.has('sus2')) { 
-      intervals.push(2); 
-      intervals = intervals.filter(i => i !== 3 && i !== 4); 
-    }
-    if (modifiers.has('aug')) {
-      intervals.push(8);
-      intervals = intervals.filter(i => i !== 7 && i !== 6);
-    }
-    if (modifiers.has('dim_mod')) {
-      intervals.push(6);
-      intervals = intervals.filter(i => i !== 7 && i !== 8);
-    }
-
-    // Extensions
-    if (modifiers.has('add9')) intervals.push(2);
-    if (modifiers.has('add11')) intervals.push(5);
-    if (modifiers.has('add13')) intervals.push(9);
-    if (modifiers.has('add6')) intervals.push(9);
-
-    const targetVals = [...new Set(intervals.map(i => (root + i) % 12))];
+    const quality = selection.quality === 'Maj' ? 'major' : selection.quality === 'm' ? 'minor' : 'diminished';
+    const modifiers = new Set([...selection.modifiers].map(mod => mod === 'dim_mod' ? 'dim' : mod));
+    const targetVals = buildChordPitchClasses({
+      root: root as PitchClass,
+      quality,
+      type: selection.type === '7th' ? 'seventh' : 'triad',
+      modifiers,
+    });
     
     // Default selection: only 'num' holes
     const newHoleIds = new Set<string>();
@@ -148,7 +100,6 @@ export default function App() {
 
     for (let i = 0; i < unique.length; i++) {
       const rVal = unique[i];
-      const rName = displayNote(rVal as PitchClass, keyRoot, theoryType);
       const ints = new Set(unique.map(v => (v - rVal + 12) % 12));
 
       let name = "";
@@ -162,6 +113,7 @@ export default function App() {
       const hasAug5 = ints.has(8);
       const hasP4 = ints.has(5);
       const hasM2 = ints.has(2);
+      const rName = displayNote(rVal as PitchClass, keyRoot, theoryType);
 
       if (hasm3 && hasd5 && !hasP5) { baseType = "dim"; valid = true; }
       else if (hasm3 && hasP5) { baseType = "m"; valid = true; }
@@ -486,26 +438,10 @@ export default function App() {
               <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">3. Chords / 基础和弦</div>
               <div className="px-5">
                 {currentKeyNotes.map((rootVal, i) => {
-                  const qualities = SCALES[keyType].qualities;
-                  const q = qualities[i];
-                  const noteName = displayNote(rootVal as PitchClass, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
-                  
-                  let triName = noteName + (q === 'm' ? 'm' : (q === 'dim' ? 'dim' : ''));
-                  let sevName = noteName;
-                  let suffix = '7';
-
-                  if (q === 'Maj') suffix = 'maj7';
-                  if (q === 'm') suffix = 'm7';
-                  if (q === 'dim') suffix = 'm7b5';
-
-                  if (keyType === 'major' && i === 4) suffix = '7';
-                  if (keyType === 'major' && i === 6) suffix = 'm7b5';
-                  if (keyType === 'minor' && i === 1) suffix = 'm7b5';
-                  if (keyType === 'minor' && i === 2) suffix = 'maj7';
-                  if (keyType === 'minor' && i === 4) suffix = 'm7';
-                  if (keyType === 'minor' && i === 6) suffix = '7';
-                  
-                  sevName += suffix;
+                  const choice = buildDiatonicChordChoices(keyRoot, keyType === 'minor' ? 'natural-minor' : 'major')[i];
+                  const q = choice.quality === 'major' ? 'Maj' : choice.quality === 'minor' ? 'm' : 'dim';
+                  const triName = choice.triadName;
+                  const sevName = choice.seventhName;
 
                   const isTriadActive = selection.rootVal === rootVal && selection.quality === q && selection.type === 'triad';
                   const isSeventhActive = selection.rootVal === rootVal && selection.quality === q && selection.type === '7th';
