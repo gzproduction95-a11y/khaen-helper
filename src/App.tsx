@@ -10,6 +10,7 @@ import { AnalysisPanel } from './components/AnalysisPanel';
 import { ChordSelector } from './components/ChordSelector';
 import { SettingsPanel, type UiModifier, type UiScaleType } from './components/SettingsPanel';
 import { KhaenDiagram } from './components/KhaenDiagram';
+import { useMidiInput } from './midi/useMidiInput';
 
 // === CONSTANTS & TYPES ===
 
@@ -37,7 +38,6 @@ export default function App() {
     type: null,
     modifiers: new Set(),
   });
-  const [midiConnected, setMidiConnected] = useState<boolean>(false);
   const [scaleFactor, setScaleFactor] = useState(1);
 
   // Derived State: Current Key Notes
@@ -100,60 +100,19 @@ export default function App() {
   }, [activeNoteValues, hintRoot, keyRoot, keyType, currentKeyNotes]);
 
 
-  // === MIDI HANDLING ===
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let midiAccess: any = null;
-
-    const onMIDIMessage = (event: any) => {
-      const data = event.data as Uint8Array;
-      if (!data || data.length < 3) return;
-      
-      const cmd = data[0] & 0xf0;
-      const note = data[1];
-      const velocity = data[2];
-      const noteVal = note % 12;
-
-      if (cmd === 144 && velocity > 0) {
-        setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
-        setActiveHoleIds(prev => {
-          const next = new Set(prev);
-          KHAEN_16_PIPES.forEach(h => {
-             if (currentKeyNotes[h.degreeIndex] === noteVal) next.add(h.id);
-          });
-          return next;
-        });
-      } else if (cmd === 128 || (cmd === 144 && velocity === 0)) {
-        setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
-        setActiveHoleIds(prev => {
-          const next = new Set(prev);
-          KHAEN_16_PIPES.forEach(h => {
-            if (currentKeyNotes[h.degreeIndex] === noteVal) next.delete(h.id);
-          });
-          return next;
-        });
-      }
-    };
-
-    const initMIDI = async () => {
-      if (navigator.requestMIDIAccess) {
-        try {
-          midiAccess = await navigator.requestMIDIAccess();
-          setMidiConnected(midiAccess.inputs.size > 0);
-          midiAccess.inputs.forEach((input: any) => {
-            input.onmidimessage = onMIDIMessage;
-          });
-          midiAccess.onstatechange = (e: any) => {
-             setMidiConnected(e.port.state === 'connected');
-          };
-        } catch (e) {
-          console.error("MIDI Failed", e);
+  const midiStatus = useMidiInput(({ pitchClass, active }) => {
+    setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() });
+    setActiveHoleIds(previous => {
+      const next = new Set(previous);
+      KHAEN_16_PIPES.forEach(pipe => {
+        if (currentKeyNotes[pipe.degreeIndex] === pitchClass) {
+          if (active) next.add(pipe.id);
+          else next.delete(pipe.id);
         }
-      }
-    };
-
-    initMIDI();
-  }, [currentKeyNotes]);
+      });
+      return next;
+    });
+  });
 
 
   // === HANDLERS ===
@@ -269,7 +228,7 @@ export default function App() {
         
         <AnalysisPanel
           {...analyzedChord}
-          midiConnected={midiConnected}
+          midiStatus={midiStatus}
           octaveExpanded={octaveExpanded}
           onReset={resetAll}
           onToggleOctave={() => setOctaveExpanded(!octaveExpanded)}
