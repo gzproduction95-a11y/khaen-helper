@@ -1,7 +1,8 @@
 {
   "name": "khaen-logic",
+  "description": "A responsive practice and chord-analysis tool for the verified 16-pipe Khaen layout.",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

@@ -1,7 +1,9 @@
 import { LEFT_PIPES, RIGHT_PIPES } from '../domain/instruments/khaen16';
 import { displayNote } from '../domain/theory/notes';
-import { buildScale } from '../domain/theory/scales';
+import { pipeDisplayDegree, pipePitchClass } from '../domain/khaenMapping';
 import type { KeyRoot, ScaleType } from '../domain/theory/types';
+
+const TOP_BRACKET_OVERHANG = 25;
 
 export interface KhaenDiagramProps {
   readonly keyRoot: KeyRoot;
@@ -10,22 +12,22 @@ export interface KhaenDiagramProps {
   readonly octavePipeIds: ReadonlySet<string>;
   readonly octaveExpanded: boolean;
   readonly scaleFactor: number;
-  readonly onPipeToggle: (pipeId: string, degreeIndex: number) => void;
+  readonly onPipeToggle: (pipeId: string) => void;
 }
 
 export function KhaenDiagram({ keyRoot, scaleType, activePipeIds, octavePipeIds, octaveExpanded, scaleFactor, onPipeToggle }: KhaenDiagramProps) {
-  const notes = buildScale(keyRoot, scaleType);
-
   const renderPipes = (pipes: typeof LEFT_PIPES) => pipes.map(pipe => {
     const isActive = activePipeIds.has(pipe.id);
     const isOctaveActive = !isActive && octaveExpanded && octavePipeIds.has(pipe.id);
-    const noteName = displayNote(notes[pipe.degreeIndex], keyRoot, scaleType);
+    const pitchClass = pipePitchClass(pipe, keyRoot, scaleType);
+    const noteName = displayNote(pitchClass, keyRoot, scaleType);
+    const displayDegree = pipeDisplayDegree(pipe, keyRoot, scaleType);
     return (
       <div key={pipe.id} data-testid={`pipe-${pipe.id}`} data-active={isActive ? 'true' : 'false'} data-octave-active={isOctaveActive ? 'true' : 'false'}
-        onClick={() => onPipeToggle(pipe.id, pipe.degreeIndex)}
+        onClick={() => onPipeToggle(pipe.id)}
         className={`w-[46px] h-[46px] border-[2px] rounded-full flex justify-center items-center cursor-pointer relative transition-all duration-100 hover:scale-110 hover:bg-[#f8f9fa] ${isActive ? 'border-[#d90429] bg-[#ffe3e3] shadow-[0_0_15px_rgba(217,4,41,0.3)]' : isOctaveActive ? 'border-[#0077b6] bg-[#e0f2fe] shadow-[0_0_15px_rgba(0,119,182,0.3)]' : 'border-[#2b2d42] bg-white'}`}>
         <div className="pointer-events-none text-center leading-none">
-          <span className={`font-extrabold text-[20px] transition-colors ${isActive ? '!text-[#d90429]' : isOctaveActive ? '!text-[#0077b6]' : ''} ${pipe.displayGroup === 'alternate' ? 'text-[#0077b6]' : pipe.displayGroup === 'top-tonic' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}`}>{pipe.label}</span>
+          <span className={`font-extrabold text-[20px] transition-colors ${isActive ? '!text-[#d90429]' : isOctaveActive ? '!text-[#0077b6]' : ''} ${pipe.displayGroup === 'alternate' ? 'text-[#0077b6]' : pipe.displayGroup === 'top-tonic' ? 'text-[#2a9d8f]' : 'text-[#2b2d42]'}`}>{displayDegree}</span>
           <span className={`block text-[11px] font-bold -mt-0.5 ${isActive ? 'text-[#d90429]' : isOctaveActive ? 'text-[#0077b6]' : 'text-[#adb5bd]'}`}>{noteName}</span>
         </div>
       </div>
@@ -33,7 +35,7 @@ export function KhaenDiagram({ keyRoot, scaleType, activePipeIds, octavePipeIds,
   });
 
   return (
-    <div className="relative pb-12 select-none" style={{ transform: `scale(${scaleFactor})`, transformOrigin: 'top center' }}>
+    <div className="khaen-diagram-scale relative pb-12 select-none" style={{ transform: `translateY(${TOP_BRACKET_OVERHANG * scaleFactor / 2}px) scale(${scaleFactor})`, transformOrigin: 'center center' }}>
       <div className="absolute top-[75px] -left-[45px] text-sm font-bold text-[#2b2d42]">L5</div>
       <div className="absolute top-[300px] -left-[45px] text-sm font-bold text-[#2b2d42]">L2-4</div>
       <div className="absolute -bottom-[30px] -left-[45px] text-sm font-bold text-[#2b2d42]">L1</div>

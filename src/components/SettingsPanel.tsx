@@ -26,8 +26,8 @@ export interface SettingsPanelProps {
 export function SettingsPanel({ visible, keyRoot, scaleType, selectedModifiers, onKeyRootChange, onScaleTypeChange, onToggleModifier, children }: SettingsPanelProps) {
   return (
     <div className={`h-full bg-white border-r border-[#e9ecef] flex flex-col z-10 shadow-[4px_0_20px_rgba(0,0,0,0.03)] shrink-0 transition-all duration-300 overflow-hidden ${visible ? 'w-[340px]' : 'w-0 border-none'}`}>
-      <div className="w-[340px]">
-        <div className="p-5 border-b border-[#e9ecef] bg-white">
+      <div className="w-[340px] h-full flex flex-col min-h-0">
+        <div className="p-5 border-b border-[#e9ecef] bg-white shrink-0">
           <div className="text-[11px] font-extrabold text-[#adb5bd] uppercase mb-2.5 tracking-wider">1. Key / 调式设定</div>
           <div className="flex gap-2.5">
             <select value={keyRoot} onChange={event => onKeyRootChange(event.target.value as KeyRoot)} className="flex-1 p-2 text-sm border border-[#ced4da] rounded-md bg-white cursor-pointer text-[#495057] focus:outline-none focus:ring-2 focus:ring-[#2b2d42]">
@@ -41,7 +41,7 @@ export function SettingsPanel({ visible, keyRoot, scaleType, selectedModifiers, 
             </select>
           </div>
         </div>
-        <div className="h-[calc(100vh-100px)] overflow-y-auto custom-scroll pb-10">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scroll pb-10">
           <div>
             <div className="px-5 pt-5 pb-2 text-[11px] font-extrabold text-[#adb5bd] uppercase tracking-wider">2. Modifiers / 修饰</div>
             <div className="px-5 pb-4 border-b border-[#e9ecef]"><div className="grid grid-cols-2 gap-2">

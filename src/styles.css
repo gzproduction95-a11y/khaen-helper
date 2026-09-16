@@ -14,6 +14,95 @@ body {
   overflow: hidden;
 }
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #1e293b; }
-::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f3f5; }
+::-webkit-scrollbar-thumb { background: #ced4da; border-radius: 4px; }
+
+.custom-scroll::-webkit-scrollbar { width: 6px; }
+.custom-scroll::-webkit-scrollbar-thumb { background-color: #ced4da; border-radius: 4px; }
+
+.khaen-body {
+  border-radius: 50% 50% 40% 40% / 15% 15% 10% 10%;
+}
+
+.responsive-workspace {
+  container-type: size;
+}
+
+.sidebar-collapsed-workspace {
+  padding-top: clamp(4.75rem, 8vmin, 5rem);
+}
+
+.workspace-layout {
+  gap: clamp(0.5rem, 1.5vmin, 1.25rem);
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.diagram-fit-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+@container (min-width: 620px) and (min-height: 280px) {
+  .workspace-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 60fr) minmax(0, 28fr) minmax(0, 12fr);
+    column-gap: clamp(0.5rem, 1.5vw, 1.5rem);
+    align-items: stretch;
+  }
+
+  .analysis-panel {
+    grid-column: 1;
+    justify-self: center;
+    width: min(80%, 480px);
+    align-self: center;
+  }
+
+  .diagram-fit-slot {
+    grid-column: 2;
+    width: 100%;
+    flex: none;
+  }
+}
+
+@container (max-width: 619px) {
+  .analysis-panel {
+    width: min(100%, 420px);
+    padding: 0.6rem 1.1rem;
+    border-radius: 1.125rem;
+  }
+
+  .analysis-panel__main {
+    font-size: clamp(1.5rem, 3.2vh, 2rem);
+    margin-bottom: 0;
+    min-height: 1.1em;
+  }
+
+  .analysis-panel__sub {
+    height: auto;
+    min-height: 1.1rem;
+    line-height: 1.25rem;
+  }
+
+  .analysis-panel__notes {
+    margin-top: 0.35rem;
+    padding: 0.15rem 0.65rem;
+  }
+
+  .analysis-panel__status {
+    margin-top: 0.25rem;
+    line-height: 1rem;
+  }
+
+  .analysis-panel__actions {
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .analysis-panel__actions button {
+    padding: 0.4rem 0.85rem;
+  }
+}

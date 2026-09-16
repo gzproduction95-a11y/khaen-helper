@@ -9,8 +9,23 @@ function requirePipe(id: string): KhaenPipe {
   return pipe;
 }
 
+const ROOTS_BY_PITCH_CLASS: readonly KeyRoot[] = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+function instrumentScale(root: KeyRoot, type: ScaleType): readonly PitchClass[] {
+  if (type === 'natural-minor') return buildScale(root, type);
+
+  const relativeMinorRoot = ROOTS_BY_PITCH_CLASS[buildScale(root, 'major')[5]];
+  return buildScale(relativeMinorRoot, 'natural-minor');
+}
+
 export function pipePitchClass(pipe: KhaenPipe, root: KeyRoot, type: ScaleType): PitchClass {
-  return buildScale(root, type)[pipe.degreeIndex];
+  return instrumentScale(root, type)[pipe.degreeIndex];
+}
+
+export function pipeDisplayDegree(pipe: KhaenPipe, root: KeyRoot, type: ScaleType): number {
+  const displayedScale = buildScale(root, type);
+  const pitchClass = pipePitchClass(pipe, root, type);
+  return displayedScale.indexOf(pitchClass) + 1;
 }
 
 export function selectedPipePitchClasses(

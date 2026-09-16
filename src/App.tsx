@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { KHAEN_16_PIPES } from './domain/instruments/khaen16';
-import { buildScale } from './domain/theory/scales';
 import { buildDiatonicChordChoices } from './domain/theory/chords';
 import { analyzeChord } from './domain/theory/analyzeChord';
-import { alternatePipesForPitchClasses, primaryPipesForChord, selectedPipePitchClasses } from './domain/khaenMapping';
+import { alternatePipesForPitchClasses, pipePitchClass, primaryPipesForChord, selectedPipePitchClasses } from './domain/khaenMapping';
 import type { ChordModifier, ChordQuality, KeyRoot, PitchClass, ScaleType } from './domain/theory/types';
 import { SidebarToggle } from './components/SidebarToggle';
 import { AnalysisPanel } from './components/AnalysisPanel';
@@ -20,6 +19,9 @@ interface ChordSelection {
   type: 'triad' | '7th' | null;
   modifiers: Set<UiModifier>;
 }
+
+// Includes side labels and the mouthpiece extending beyond the 180×728 drawing box.
+const KHAEN_FIT_BOUNDS = { width: 270, height: 753 };
 
 // Data from HTML logic
 // === MAIN COMPONENT ===
@@ -39,11 +41,8 @@ export default function App() {
     modifiers: new Set(),
   });
   const [scaleFactor, setScaleFactor] = useState(1);
+  const diagramViewportRef = useRef<HTMLDivElement>(null);
 
-  // Derived State: Current Key Notes
-  const currentKeyNotes = useMemo(() => {
-    return buildScale(keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
-  }, [keyRoot, keyType]);
   const chordChoices = useMemo(() => buildDiatonicChordChoices(keyRoot, keyType === 'minor' ? 'natural-minor' : 'major'), [keyRoot, keyType]);
 
   // Derived State: Active Note Values for Analysis
@@ -81,7 +80,7 @@ export default function App() {
     setActiveHoleIds(newHoleIds);
     setHintRoot(root);
 
-  }, [selection, currentKeyNotes, keyRoot, keyType]);
+  }, [selection, keyRoot, keyType]);
 
   // === LOGIC: Chord Analysis ===
   const analyzedChord = useMemo(() => {
@@ -97,7 +96,7 @@ export default function App() {
           : analysis.status === 'unknown' ? 'Unknown Shape' : 'Exact Match',
       notes: analysis.notes.length ? `Notes: ${analysis.notes.join(' - ')}` : '-',
     };
-  }, [activeNoteValues, hintRoot, keyRoot, keyType, currentKeyNotes]);
+  }, [activeNoteValues, hintRoot, keyRoot, keyType]);
 
 
   const midiStatus = useMidiInput(({ pitchClass, active }) => {
@@ -105,7 +104,7 @@ export default function App() {
     setActiveHoleIds(previous => {
       const next = new Set(previous);
       KHAEN_16_PIPES.forEach(pipe => {
-        if (currentKeyNotes[pipe.degreeIndex] === pitchClass) {
+        if (pipePitchClass(pipe, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major') === pitchClass) {
           if (active) next.add(pipe.id);
           else next.delete(pipe.id);
         }
@@ -146,9 +145,11 @@ export default function App() {
     }
   };
 
-  const handleHoleClick = (holeId: string, degIndex: number) => {
+  const handleHoleClick = (holeId: string) => {
     setSelection({ rootVal: null, quality: null, type: null, modifiers: new Set() }); 
-    const noteVal = currentKeyNotes[degIndex];
+    const pipe = KHAEN_16_PIPES.find(candidate => candidate.id === holeId);
+    if (!pipe) return;
+    const noteVal = pipePitchClass(pipe, keyRoot, keyType === 'minor' ? 'natural-minor' : 'major');
 
     setActiveHoleIds(prev => {
        const next = new Set(prev);
@@ -169,15 +170,10 @@ export default function App() {
        const w = window.innerWidth;
        const h = window.innerHeight;
        
-       // Handle scale
-       if (h < 700) setScaleFactor(0.8);
-       else if (h < 900) setScaleFactor(0.9);
-       else setScaleFactor(1);
-
        // USER REQUEST: Auto-hide sidebar if mobile/tablet in portrait mode
        const isPortrait = h > w;
-       const isMobileOrTablet = w <= 1024;
-       if (isPortrait && isMobileOrTablet) {
+       const isCompactScreen = w <= 1024 && (isPortrait || h <= 520);
+       if (isCompactScreen) {
           setSidebarVisible(false);
        }
     };
@@ -187,19 +183,32 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    const viewport = diagramViewportRef.current;
+    if (!viewport) return;
+
+    const updateScale = (width: number, height: number) => {
+      const scale = Math.max(0, Math.min(1, width / KHAEN_FIT_BOUNDS.width, height / KHAEN_FIT_BOUNDS.height));
+      setScaleFactor(previous => Math.abs(previous - scale) < 0.001 ? previous : scale);
+    };
+
+    if (typeof ResizeObserver === 'undefined') {
+      const updateFromWindow = () => updateScale(viewport.clientWidth || window.innerWidth, viewport.clientHeight || window.innerHeight);
+      window.addEventListener('resize', updateFromWindow);
+      updateFromWindow();
+      return () => window.removeEventListener('resize', updateFromWindow);
+    }
+
+    const observer = new ResizeObserver(entries => {
+      const size = entries[0]?.contentRect;
+      if (size) updateScale(size.width, size.height);
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="flex w-screen h-screen overflow-hidden bg-[#f5f7fa] text-[#2b2d42] font-sans relative">
-      
-      <style>{`
-        .khaen-body {
-          border-radius: 50% 50% 40% 40% / 15% 15% 10% 10%;
-        }
-        .text-shadow {
-           text-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .custom-scroll::-webkit-scrollbar { width: 6px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background-color: #ced4da; border-radius: 4px; }
-      `}</style>
+    <div className="flex w-screen h-[100dvh] min-h-0 overflow-hidden bg-[#f5f7fa] text-[#2b2d42] font-sans relative">
 
       {/* --- TOGGLE BUTTON --- */}
       <SidebarToggle visible={sidebarVisible} onToggle={() => setSidebarVisible(!sidebarVisible)} />
@@ -224,25 +233,28 @@ export default function App() {
       </SettingsPanel>
 
       {/* --- RIGHT MAIN PANEL --- */}
-      <div className="flex-1 flex flex-col items-center p-8 relative h-full overflow-y-auto">
-        
-        <AnalysisPanel
-          {...analyzedChord}
-          midiStatus={midiStatus}
-          octaveExpanded={octaveExpanded}
-          onReset={resetAll}
-          onToggleOctave={() => setOctaveExpanded(!octaveExpanded)}
-        />
+      <div className={`responsive-workspace flex-1 min-w-0 min-h-0 p-[clamp(0.5rem,2vmin,2rem)] relative overflow-hidden ${sidebarVisible ? '' : 'sidebar-collapsed-workspace'}`}>
+        <div className="workspace-layout h-full w-full flex flex-col items-center">
+          <AnalysisPanel
+            {...analyzedChord}
+            midiStatus={midiStatus}
+            octaveExpanded={octaveExpanded}
+            onReset={resetAll}
+            onToggleOctave={() => setOctaveExpanded(!octaveExpanded)}
+          />
 
-        <KhaenDiagram
-          keyRoot={keyRoot}
-          scaleType={keyType === 'minor' ? 'natural-minor' : 'major'}
-          activePipeIds={activeHoleIds}
-          octavePipeIds={octavePipeIds}
-          octaveExpanded={octaveExpanded}
-          scaleFactor={scaleFactor}
-          onPipeToggle={handleHoleClick}
-        />
+          <div ref={diagramViewportRef} className="diagram-fit-slot w-full min-w-0 min-h-0 flex-1">
+            <KhaenDiagram
+              keyRoot={keyRoot}
+              scaleType={keyType === 'minor' ? 'natural-minor' : 'major'}
+              activePipeIds={activeHoleIds}
+              octavePipeIds={octavePipeIds}
+              octaveExpanded={octaveExpanded}
+              scaleFactor={scaleFactor}
+              onPipeToggle={handleHoleClick}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

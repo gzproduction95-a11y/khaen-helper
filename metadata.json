@@ -1,5 +1,5 @@
 {
-  "name": "Khaen Logic - Visualizer & Theory",
-  "description": "A professional visualization and analysis tool for the Thai Khaen mouth organ, featuring relative minor logic, interactive chord analysis, and MIDI integration.",
+  "name": "Khaen Logic",
+  "description": "A responsive browser-based composing and practice companion for the verified 16-pipe Khaen layout, with major and natural-minor keys, interactive chord analysis, and optional MIDI input.",
   "requestFramePermissions": []
 }
