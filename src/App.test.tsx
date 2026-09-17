@@ -10,6 +10,20 @@ describe('Khaen app', () => {
     expect(screen.getByRole('button', { name: 'OCTAVE' })).toBeInTheDocument();
   });
 
+  test('shows the separated end rows and a text-free inward breath cue', () => {
+    render(<App />);
+    expect(screen.getAllByTestId('pipe-L8')[0]).toHaveClass('khaen-pipe-row--top');
+    expect(screen.getAllByTestId('pipe-R8')[0]).toHaveClass('khaen-pipe-row--top');
+    expect(screen.getAllByTestId('pipe-L1')[0]).toHaveClass('khaen-pipe-row--bottom');
+    expect(screen.getAllByTestId('pipe-R1')[0]).toHaveClass('khaen-pipe-row--bottom');
+    expect(screen.getByTestId('khaen-breath-cue')).toBeInTheDocument();
+    expect(screen.getByTestId('khaen-breath-cue')).toHaveTextContent('');
+    expect(screen.getByTestId('khaen-left-bottom-label')).toHaveTextContent('L1');
+    expect(screen.getByTestId('khaen-right-bottom-label')).toHaveTextContent('R1');
+    expect(screen.getByTestId('khaen-left-bottom-label')).toHaveClass('khaen-end-label');
+    expect(screen.getByTestId('khaen-right-bottom-label')).toHaveClass('khaen-end-label');
+  });
+
   test('selects A minor on the primary pipes', () => {
     render(<App />);
     fireEvent.click(screen.getAllByRole('button', { name: 'Am' })[0]);
@@ -89,7 +103,7 @@ describe('Khaen app', () => {
     try {
       const scaledElement = [...document.querySelectorAll<HTMLElement>('[style]')]
         .find(element => element.style.transform.includes('scale('));
-      expect(scaledElement?.style.transform).toBe('translateY(6.25px) scale(0.5)');
+      expect(scaledElement?.style.transform).toBe('translateY(6.112012987012987px) scale(0.488961038961039)');
     } finally {
       rendered.unmount();
       vi.unstubAllGlobals();

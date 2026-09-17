@@ -20,8 +20,8 @@ interface ChordSelection {
   modifiers: Set<UiModifier>;
 }
 
-// Includes side labels and the mouthpiece extending beyond the 180×728 drawing box.
-const KHAEN_FIT_BOUNDS = { width: 270, height: 753 };
+// Includes side labels, the mouthpiece, end-row spacing, and the breath cue.
+const KHAEN_FIT_BOUNDS = { width: 270, height: 770 };
 
 // Data from HTML logic
 // === MAIN COMPONENT ===

@@ -46,6 +46,17 @@ body {
   overflow: hidden;
 }
 
+/* Keep the end rows visually distinct from the six middle positions. */
+.khaen-pipe-row--top {
+  position: relative;
+  top: -18px;
+}
+
+.khaen-pipe-row--bottom {
+  position: relative;
+  top: 18px;
+}
+
 @container (min-width: 620px) and (min-height: 280px) {
   .workspace-layout {
     display: grid;
